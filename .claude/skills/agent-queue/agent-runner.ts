@@ -20,6 +20,7 @@ export type AgentDef = {
   id: string;
   description: string;
   listen: string[];
+  allowedTools: string[];
   systemPrompt: string;
   filePath: string;
 };
@@ -41,7 +42,15 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const id = basename(filePath, ".md");
   const description = (attrs.description as string) ?? "";
   const listen = (attrs.listen as string[]) ?? ["*"];
-  return { id, description, listen, systemPrompt: body.trim(), filePath };
+  const allowedTools = (attrs.allowed_tools as string[] | undefined) ?? [];
+  return {
+    id,
+    description,
+    listen,
+    allowedTools,
+    systemPrompt: body.trim(),
+    filePath,
+  };
 };
 
 /** Load all agent definitions from a directory, optionally filtering to one. */
@@ -109,6 +118,18 @@ where <json> is a JSON object with "type" and optional "payload" fields.
   return header + agent.systemPrompt;
 };
 
+/** Build --allowedTools CLI args. Auto-injects event-queue Bash permission. */
+export const buildToolArgs = (
+  allowedTools: string[],
+  eventQueuePath: string,
+): string[] => {
+  // Omit the `--allowedTools` arg if *
+  if (allowedTools.includes("*")) return [];
+  const eventQueuePattern = `Bash(${eventQueuePath}:*)`;
+  const tools = [...allowedTools, eventQueuePattern];
+  return ["--allowedTools", tools.join(" ")];
+};
+
 /** Invoke an agent as a headless Claude Code instance. */
 export const invokeAgent = async (
   agent: AgentDef,
@@ -118,6 +139,7 @@ export const invokeAgent = async (
 ): Promise<{ success: boolean; output: string }> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath, eventQueuePath);
   const userMessage = formatEventsForPrompt(events);
+  const toolArgs = buildToolArgs(agent.allowedTools, eventQueuePath);
 
   const cmd = new Deno.Command("claude", {
     args: [
@@ -126,6 +148,7 @@ export const invokeAgent = async (
       systemPrompt,
       "--output-format",
       "text",
+      ...toolArgs,
     ],
     stdin: "piped",
     stdout: "piped",
@@ -182,7 +205,10 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
   const agents = await loadAllAgents(agentsDir, config.agentFilter);
   if (agents.length === 0) die("No agents found.");
   for (const a of agents) {
-    console.log(`  ${a.id} — listens: [${a.listen.join(", ")}]`);
+    const toolInfo = a.allowedTools.includes("*")
+      ? "tools: all"
+      : `tools: [${a.allowedTools.join(", ")}]`;
+    console.log(`  ${a.id} — listens: [${a.listen.join(", ")}] — ${toolInfo}`);
   }
 
   const db = openDb(dbPath);

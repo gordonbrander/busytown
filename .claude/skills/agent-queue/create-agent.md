@@ -21,6 +21,9 @@ Use kebab-case for filenames.
 description: Brief description of the agent's purpose
 listen:
   - "event.pattern"
+allowed_tools:
+  - "Read"
+  - "Grep"
 ---
 ```
 
@@ -28,6 +31,7 @@ listen:
 |-------|------|----------|-------------|
 | `description` | string | yes | Brief description of the agent's purpose. Included in the agent's system prompt header. |
 | `listen` | string[] | no | Event type patterns to subscribe to. Defaults to `["*"]` if omitted. |
+| `allowed_tools` | string[] | no | Tool allowlist. `["*"]` grants all tools. If omitted, the agent can only push events. |
 
 ## Listen Patterns
 
@@ -38,6 +42,43 @@ listen:
 | `"task.*"` | Prefix glob | `task.created`, `task.done`, `task.failed`, etc. |
 
 An agent is invoked when **any** of its listen patterns match an incoming event. Events emitted by the agent itself are always excluded from wildcard (`*`) matching.
+
+## Tool Permissions
+
+By default, agents can only push events. Use `allowed_tools` to grant access to additional Claude Code tools. Use `["*"]` to grant access to all tools.
+
+### Allowlist Format
+
+| Entry | Meaning |
+|-------|---------|
+| `"*"` | Allow all tools (no restrictions) |
+| `"Read"` | Allow the Read tool |
+| `"Bash(git:*)"` | Allow Bash only for commands starting with `git` |
+| `"Bash(npm test:*)"` | Allow Bash only for `npm test` commands |
+
+The runner automatically injects permission to run `event-queue.ts push` via Bash, so you never need to include that yourself.
+
+### Common Presets
+
+**Read-only** (search code, run git, push events):
+```yaml
+allowed_tools:
+  - "Read"
+  - "Grep"
+  - "Glob"
+  - "Bash(git:*)"
+```
+
+**Read-write** (also edit files):
+```yaml
+allowed_tools:
+  - "Read"
+  - "Grep"
+  - "Glob"
+  - "Edit"
+  - "Write"
+  - "Bash(git:*)"
+```
 
 ## System Prompt Body
 
