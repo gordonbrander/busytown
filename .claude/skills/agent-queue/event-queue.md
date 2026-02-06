@@ -1,10 +1,4 @@
----
-name: event-queue
-description: SQLite-backed event queue for inter-worker communication with cursor-based polling.
-user_invocable: false
----
-
-# Event Queue
+# Event Queue CLI Reference
 
 A SQLite-backed event queue for inter-worker communication. Workers can push events and poll for new events using cursor-based pagination. Each worker maintains its own cursor position, enabling reliable at-least-once delivery.
 
