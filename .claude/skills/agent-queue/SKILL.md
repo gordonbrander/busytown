@@ -10,17 +10,21 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 
 ## Quick Start
 
-1. **Start the runner**:
+1. **Start the daemon** (runs in background with auto-restart):
 
    ```bash
-   ./agent-runner.ts run
+   ./daemon.sh start
    ```
+
+   Other daemon commands: `stop`, `restart`, `status`, `logs`
 
 2. **Push an event** to trigger agents:
 
    ```bash
    ./event-queue.ts push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
    ```
+
+To run the agent runner in the foreground instead, use `./agent-runner.ts run` directly.
 
 ## agent-runner.ts CLI
 
