@@ -63,7 +63,31 @@ Agents run concurrently but each agent processes one batch at a time (no duplica
   Your system prompt here...
   ```
 
+## Task Board
+
+Agents can coordinate work through a shared task board. Tasks can be created, claimed (compare-and-swap), updated, and deleted. All mutations emit events to the event queue.
+
+```bash
+# Add a task
+./task-board.ts add --worker user --title "Review PR #42"
+
+# List open tasks
+./task-board.ts list --status open
+
+# Claim a task (atomic — only one agent wins)
+./task-board.ts claim --worker agent-1 --id 1
+
+# Mark done (only claim holder can update)
+./task-board.ts update --worker agent-1 --id 1 --status done
+
+# View summary
+./task-board.ts summary
+```
+
+See [Task Board CLI](task-board.md) for the full reference.
+
 ## Supporting References
 
 - [Event Queue CLI](event-queue.md) — the underlying `event-queue.ts` commands (`push`, `watch`, `since`, `events`, `cursor`)
+- [Task Board CLI](task-board.md) — shared task board for multi-agent work coordination
 - [Creating Agents](create-agent.md) — guide for defining new agent files

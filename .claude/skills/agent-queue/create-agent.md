@@ -157,6 +157,41 @@ When triggered by file changes, review the modified TypeScript files for:
 Provide a brief summary of findings. If no issues found, confirm the code looks good.
 ```
 
+## Using the Task Board
+
+Agents can coordinate work through a shared task board. The agent runner automatically injects task board CLI instructions into each agent's system prompt.
+
+### Workflow
+
+1. **Create tasks** — break work into discrete units with `task-board add`
+2. **Claim before working** — use `task-board claim` to atomically take ownership
+3. **Handle claim failures** — if a claim fails (exit code 1), the task is already taken; try another
+4. **Update status** — mark tasks `done`, `blocked`, etc. with `task-board update`
+5. **Listen for task events** — subscribe to `task.*` to react to board changes
+
+### Example Agent Using the Task Board
+
+```markdown
+---
+description: Picks up open review tasks and reviews the code
+listen:
+  - "task.created"
+allowed_tools:
+  - "Read"
+  - "Grep"
+  - "Glob"
+---
+
+When a new task is created, check if it's a code review task.
+If so, claim it, perform the review, then mark it done.
+
+If the claim fails, another agent already took it — move on.
+```
+
+### Task Board Permissions
+
+The runner automatically grants Bash permission for `task-board.ts` commands, just like it does for `event-queue.ts`. You don't need to add it to `allowed_tools`.
+
 ## Tips
 
 - **Single responsibility** — each agent should do one thing well. Create multiple focused agents rather than one monolithic one.

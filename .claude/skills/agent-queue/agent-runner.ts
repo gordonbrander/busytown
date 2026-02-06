@@ -13,7 +13,8 @@
 import { extract } from "jsr:@std/front-matter@^1.0/yaml";
 import { parseArgs } from "node:util";
 import { basename, join, resolve } from "node:path";
-import { type Event, openDb, pollEvents } from "./event-queue.ts";
+import { openDb } from "./db.ts";
+import { type Event, pollEvents } from "./event-queue.ts";
 import { die, sleep } from "./utils.ts";
 
 export type AgentDef = {
@@ -107,6 +108,7 @@ export const buildSystemPrompt = (
   agent: AgentDef,
   dbPath: string,
   eventQueuePath: string,
+  taskBoardPath: string,
 ): string => {
   const header = `You are the "${agent.id}" agent. ${agent.description}
 
@@ -117,21 +119,42 @@ To push events to the queue, run:
 
 where <json> is a JSON object with "type" and optional "payload" fields.
 
+## Task board
+
+A shared task board is available for coordinating work with other agents.
+
+Commands:
+  ${taskBoardPath} list --db ${dbPath} [--status <s>] [--claimed-by <id>]
+  ${taskBoardPath} add --worker ${agent.id} --db ${dbPath} --title <text> [--content <text>] [--meta <json>]
+  ${taskBoardPath} get --id <n> --db ${dbPath}
+  ${taskBoardPath} claim --worker ${agent.id} --id <n> --db ${dbPath}
+  ${taskBoardPath} unclaim --worker ${agent.id} --id <n> --db ${dbPath}
+  ${taskBoardPath} update --worker ${agent.id} --id <n> --db ${dbPath} [--title/--content/--status <val>] [--meta <json>]
+  ${taskBoardPath} delete --worker ${agent.id} --id <n> --db ${dbPath}
+  ${taskBoardPath} summary --db ${dbPath}
+
+Claim a task before working on it. Only the claim holder can update or delete a task.
+If a claim fails (exit code 1), the task is already taken — try another task.
+
 ---
 
 `;
   return header + agent.systemPrompt;
 };
 
-/** Build --allowedTools CLI args. Auto-injects event-queue Bash permission. */
+/** Build --allowedTools CLI args. Auto-injects event-queue and task-board Bash permissions. */
 export const buildToolArgs = (
   allowedTools: string[],
   eventQueuePath: string,
+  taskBoardPath: string,
 ): string[] => {
   // Omit the `--allowedTools` arg if *
   if (allowedTools.includes("*")) return [];
-  const eventQueuePattern = `Bash(${eventQueuePath}:*)`;
-  const tools = [...allowedTools, eventQueuePattern];
+  const tools = [
+    ...allowedTools,
+    `Bash(${eventQueuePath}:*)`,
+    `Bash(${taskBoardPath}:*)`,
+  ];
   return ["--allowedTools", tools.join(" ")];
 };
 
@@ -141,10 +164,11 @@ export const invokeAgent = async (
   events: Event[],
   dbPath: string,
   eventQueuePath: string,
+  taskBoardPath: string,
 ): Promise<{ success: boolean; output: string }> => {
-  const systemPrompt = buildSystemPrompt(agent, dbPath, eventQueuePath);
+  const systemPrompt = buildSystemPrompt(agent, dbPath, eventQueuePath, taskBoardPath);
   const userMessage = formatEventsForPrompt(events);
-  const toolArgs = buildToolArgs(agent.allowedTools, eventQueuePath);
+  const toolArgs = buildToolArgs(agent.allowedTools, eventQueuePath, taskBoardPath);
 
   const cmd = new Deno.Command("claude", {
     args: [
@@ -201,10 +225,9 @@ export const filterMatchedEvents = (
 export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
   const agentsDir = resolve(config.agentsDir);
   const dbPath = resolve(config.dbPath);
-  const eventQueuePath = resolve(
-    import.meta.dirname ?? ".",
-    "event-queue.ts",
-  );
+  const skillDir = import.meta.dirname ?? ".";
+  const eventQueuePath = resolve(skillDir, "event-queue.ts");
+  const taskBoardPath = resolve(skillDir, "task-board.ts");
 
   const db = openDb(dbPath);
   const running = new Set<string>();
@@ -244,7 +267,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
         );
 
         running.add(agent.id);
-        invokeAgent(agent, matched, dbPath, eventQueuePath)
+        invokeAgent(agent, matched, dbPath, eventQueuePath, taskBoardPath)
           .then(({ success, output }) => {
             console.log(formatAgentOutput(agent.id, success, output));
           })

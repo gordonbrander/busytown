@@ -11,43 +11,10 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
+import { openDb } from "./db.ts";
 import { die, requireOpt, sleep } from "./utils.ts";
 
-/**
- * Opens a SQLite database and initializes the event queue schema.
- *
- * Enables WAL mode for better concurrent access and creates the `events`
- * and `worker_cursors` tables if they don't exist.
- *
- * @param path - Path to the SQLite database file
- * @returns The opened database connection
- */
-export const openDb = (path: string): DatabaseSync => {
-  const db = new DatabaseSync(path);
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec("PRAGMA user_version = 1");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      timestamp INTEGER NOT NULL DEFAULT (unixepoch()),
-      type TEXT NOT NULL,
-      worker_id TEXT NOT NULL,
-      payload TEXT NOT NULL DEFAULT '{}'
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS worker_cursors (
-      worker_id TEXT PRIMARY KEY,
-      since INTEGER NOT NULL DEFAULT 0,
-      timestamp INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `);
-
-  return db;
-};
+export { openDb };
 
 /**
  * A parsed event with deserialized payload.
