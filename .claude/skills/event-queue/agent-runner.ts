@@ -14,6 +14,7 @@ import { extract } from "jsr:@std/front-matter@^1.0/yaml";
 import { parseArgs } from "node:util";
 import { basename, join, resolve } from "node:path";
 import { type Event, openDb, pollEvents } from "./event-queue.ts";
+import { die, sleep } from "./utils.ts";
 
 export type AgentDef = {
   id: string;
@@ -148,9 +149,25 @@ export const invokeAgent = async (
   return { success: code === 0, output: out || err };
 };
 
-/** Promise-based sleep utility. */
-const sleep = (ms: number): Promise<void> =>
-  new Promise((r) => setTimeout(r, ms));
+/** Format an agent invocation result for console output. */
+export const formatAgentOutput = (
+  agentId: string,
+  success: boolean,
+  output: string,
+): string => {
+  const status = success ? "completed" : "failed";
+  const header = `[${agentId}] ${status}`;
+  const trimmed = output.trim();
+  if (!trimmed) return header;
+  const indented = trimmed.split("\n").map((l) => `  ${l}`).join("\n");
+  return `${header}\n${indented}`;
+};
+
+/** Filter polled events to those matching an agent's listen patterns. */
+export const filterMatchedEvents = (
+  events: Event[],
+  agent: AgentDef,
+): Event[] => events.filter((e) => matchesListen(e, agent));
 
 /** Main poll loop: loads agents, polls events, dispatches to matching agents. */
 export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
@@ -163,10 +180,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
 
   console.log(`Loading agents from ${agentsDir}...`);
   const agents = await loadAllAgents(agentsDir, config.agentFilter);
-  if (agents.length === 0) {
-    console.error("No agents found.");
-    Deno.exit(1);
-  }
+  if (agents.length === 0) die("No agents found.");
   for (const a of agents) {
     console.log(`  ${a.id} — listens: [${a.listen.join(", ")}]`);
   }
@@ -184,10 +198,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
 
         // Poll with per-agent cursor, excluding events from self
         const allEvents = pollEvents(db, agent.id, 100, agent.id);
-        if (allEvents.length === 0) continue;
-
-        // Filter to only events matching this agent's listen patterns
-        const matched = allEvents.filter((e) => matchesListen(e, agent));
+        const matched = filterMatchedEvents(allEvents, agent);
         if (matched.length === 0) continue;
 
         console.log(
@@ -199,17 +210,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
         running.add(agent.id);
         invokeAgent(agent, matched, dbPath, eventQueuePath)
           .then(({ success, output }) => {
-            const status = success ? "completed" : "failed";
-            console.log(`[${agent.id}] ${status}`);
-            if (output.trim()) {
-              console.log(
-                output
-                  .trim()
-                  .split("\n")
-                  .map((l) => `  ${l}`)
-                  .join("\n"),
-              );
-            }
+            console.log(formatAgentOutput(agent.id, success, output));
           })
           .catch((err) => {
             console.error(`[${agent.id}] error: ${err}`);
@@ -260,10 +261,7 @@ const cli = async (): Promise<void> => {
 
   const command = positionals[0];
 
-  if (command !== "run") {
-    console.error(`Unknown command: ${command}\n\n${USAGE}`);
-    Deno.exit(1);
-  }
+  if (command !== "run") die(`Unknown command: ${command}\n\n${USAGE}`);
 
   await runPollLoop({
     agentsDir: values["agents-dir"]!,

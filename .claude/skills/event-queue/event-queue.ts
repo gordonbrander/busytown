@@ -11,6 +11,7 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
+import { die, requireOpt, sleep } from "./utils.ts";
 
 /**
  * Opens a SQLite database and initializes the event queue schema.
@@ -213,21 +214,6 @@ const readStdin = async (): Promise<string> => {
   if (n === null) return "{}";
   return new TextDecoder().decode(buf.subarray(0, n)).trim() || "{}";
 };
-
-/** Prints error message to stderr and exits with code 1. */
-const die = (msg: string): never => {
-  console.error(msg);
-  Deno.exit(1);
-};
-
-/** Returns the value or exits with a missing option error. */
-const requireOpt = (val: string | undefined, name: string): string => {
-  if (!val) return die(`Missing required option: --${name}`);
-  return val;
-};
-
-/** Promise-based sleep utility. */
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** CLI entrypoint: parses args and dispatches to subcommands. */
 const cli = async () => {
