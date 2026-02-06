@@ -302,7 +302,9 @@ const cli = async () => {
           limit,
           values.omit_worker,
         );
-        console.log(JSON.stringify(events));
+        for (const event of events) {
+          console.log(JSON.stringify(event));
+        }
         return;
       }
 
