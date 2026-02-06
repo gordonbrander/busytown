@@ -59,10 +59,15 @@ export const loadAllAgents = async (
   agentFilter?: string,
 ): Promise<AgentDef[]> => {
   const agents: AgentDef[] = [];
-  for await (const entry of Deno.readDir(agentsDir)) {
-    if (!entry.isFile || !entry.name.endsWith(".md")) continue;
-    if (agentFilter && basename(entry.name, ".md") !== agentFilter) continue;
-    agents.push(await loadAgentDef(join(agentsDir, entry.name)));
+  try {
+    for await (const entry of Deno.readDir(agentsDir)) {
+      if (!entry.isFile || !entry.name.endsWith(".md")) continue;
+      if (agentFilter && basename(entry.name, ".md") !== agentFilter) continue;
+      agents.push(await loadAgentDef(join(agentsDir, entry.name)));
+    }
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) return agents;
+    throw err;
   }
   return agents;
 };
@@ -201,23 +206,28 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
     "event-queue.ts",
   );
 
-  console.log(`Loading agents from ${agentsDir}...`);
-  const agents = await loadAllAgents(agentsDir, config.agentFilter);
-  if (agents.length === 0) die("No agents found.");
-  for (const a of agents) {
-    const toolInfo = a.allowedTools.includes("*")
-      ? "tools: all"
-      : `tools: [${a.allowedTools.join(", ")}]`;
-    console.log(`  ${a.id} — listens: [${a.listen.join(", ")}] — ${toolInfo}`);
-  }
-
   const db = openDb(dbPath);
   const running = new Set<string>();
+  const knownAgents = new Set<string>();
 
   console.log(`Polling ${dbPath} every ${config.pollIntervalMs}ms...\n`);
 
   try {
     while (true) {
+      const agents = await loadAllAgents(agentsDir, config.agentFilter);
+
+      // Log newly discovered agents
+      for (const a of agents) {
+        if (knownAgents.has(a.id)) continue;
+        const toolInfo = a.allowedTools.includes("*")
+          ? "tools: all"
+          : `tools: [${a.allowedTools.join(", ")}]`;
+        console.log(
+          `  ${a.id} — listens: [${a.listen.join(", ")}] — ${toolInfo}`,
+        );
+        knownAgents.add(a.id);
+      }
+
       for (const agent of agents) {
         // Skip if this agent already has an invocation in flight
         if (running.has(agent.id)) continue;
