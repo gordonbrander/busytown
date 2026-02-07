@@ -273,6 +273,7 @@ export const claimEvent = (
   workerId: string,
   eventId: number,
 ): boolean => {
+  logger.info("Claiming event", { eventId, workerId });
   return transaction(db, () => {
     const insert = db.prepare(
       "INSERT OR IGNORE INTO claims (event_id, worker_id) VALUES (?, ?)",
