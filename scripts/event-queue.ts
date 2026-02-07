@@ -89,17 +89,26 @@ await new Command()
 
   .command("events")
     .description("Get events after a given id.")
-    .option("--since <id:string>", "Event ID to start after", { required: true })
+    .option("--since <id:string>", "Event ID to start after")
     .option("--limit <n:string>", "Maximum number of events")
+    .option("--tail <n:string>", "Show the last n events")
     .option("--omit-worker <id:string>", "Omit events from this worker")
     .option("--worker <id:string>", "Only show events from this worker")
     .option("--type <type:string>", "Only show events of this type (* = all)", { default: "*" })
     .action((options) => {
       const db = openDb(options.db);
       try {
-        const sinceId = parseInt(options.since, 10);
+        const sinceId = options.since ? parseInt(options.since, 10) : 0;
         const limit = options.limit ? parseInt(options.limit, 10) : 100;
-        const events = getEventsSince(db, sinceId, limit, options.omitWorker, options.worker, options.type);
+        const tail = options.tail ? parseInt(options.tail, 10) : undefined;
+        const events = getEventsSince(db, {
+          sinceId,
+          limit,
+          tail,
+          omitWorkerId: options.omitWorker,
+          filterWorkerId: options.worker,
+          filterType: options.type,
+        });
         for (const event of events) {
           console.log(JSON.stringify(event));
         }

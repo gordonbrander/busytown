@@ -76,23 +76,33 @@ export const getSince = (db: DatabaseSync, workerId: string): number => {
 };
 
 /**
+ * Options for {@link getEventsSince}.
+ */
+export type GetEventsOptions = {
+  /** Return events with ID greater than this value */
+  sinceId?: number;
+  /** Maximum number of events for forward scan (default: 100) */
+  limit?: number;
+  /** Worker ID to exclude from results */
+  omitWorkerId?: string;
+  /** Worker ID to include exclusively */
+  filterWorkerId?: string;
+  /** Event type to filter by ("*" or undefined means all) */
+  filterType?: string;
+  /** When set, return the last N matching events (ordered ascending) */
+  tail?: number;
+};
+
+/**
  * Fetches events after a given event ID.
  *
  * @param db - Database connection
- * @param sinceId - Return events with ID greater than this value
- * @param limit - Maximum number of events to return (default: 100)
- * @param omitWorkerId - Optional worker ID to exclude from results
- * @param filterWorkerId - Optional worker ID to include exclusively
- * @param filterType - Optional event type to filter by ("*" or undefined means all)
+ * @param opts - Query options
  * @returns Array of events ordered by ID ascending
  */
 export const getEventsSince = (
   db: DatabaseSync,
-  sinceId: number,
-  limit = 100,
-  omitWorkerId?: string,
-  filterWorkerId?: string,
-  filterType?: string,
+  { sinceId = 0, limit = 100, omitWorkerId, filterWorkerId, filterType, tail }: GetEventsOptions = {},
 ): Event[] => {
   let sql = "SELECT * FROM events WHERE id > ?";
   const params: (number | string)[] = [sinceId];
@@ -108,11 +118,17 @@ export const getEventsSince = (
     sql += " AND type = ?";
     params.push(filterType);
   }
-  sql += " ORDER BY id ASC LIMIT ?";
-  params.push(limit);
+  if (tail) {
+    sql += " ORDER BY id DESC LIMIT ?";
+    params.push(tail);
+  } else {
+    sql += " ORDER BY id ASC LIMIT ?";
+    params.push(limit);
+  }
   const stmt = db.prepare(sql);
   const rows = stmt.all(...params) as RawEventRow[];
-  return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
+  const events = rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
+  return tail ? events.reverse() : events;
 };
 
 /**
@@ -134,7 +150,7 @@ export const pollEvents = (
   omitWorkerId?: string,
 ): Event[] => {
   const since = getSince(db, workerId);
-  const events = getEventsSince(db, since, limit, omitWorkerId);
+  const events = getEventsSince(db, { sinceId: since, limit, omitWorkerId });
   if (events.length > 0) {
     updateCursor(db, workerId, events[events.length - 1].id);
   }

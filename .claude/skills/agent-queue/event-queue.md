@@ -63,9 +63,12 @@ deno task event-queue since --worker agent-1
 Fetch events after a given ID. Outputs ndjson (one event per line).
 
 ```
-deno task event-queue events --since <id> [--limit <n>] [--omit-worker <id>] [--worker <id>] [--type <type>]
+deno task event-queue events [--since <id>] [--tail <n>] [--limit <n>] [--omit-worker <id>] [--worker <id>] [--type <type>]
 ```
 
+- `--since <id>` — event ID to start after (forward scan, ascending; default: `0`)
+- `--tail <n>` — show the last n events (output ascending)
+- `--limit <n>` — maximum number of events for forward scan (default: `100`)
 - `--worker <id>` — only show events from this worker
 - `--omit-worker <id>` — exclude events from this worker
 - `--type <type>` — only show events of this type (`*` = all, default: `*`)
@@ -82,6 +85,9 @@ deno task event-queue events --since 0 --worker agent-1
 
 # Filter by event type:
 deno task event-queue events --since 0 --type task.created
+
+# Show the last 5 events:
+deno task event-queue events --tail 5
 ```
 
 ### cursor
