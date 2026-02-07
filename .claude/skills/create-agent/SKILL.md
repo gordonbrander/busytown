@@ -134,7 +134,7 @@ build.failed
 The agent runner injects the `deno task event-queue push` command into each agent's system prompt. Agents can push events by running:
 
 ```bash
-deno task event-queue push --worker <agent-id> --db events.db --data '{"type":"review.completed","payload":{"files":["src/app.ts"],"issues":0}}'
+deno task event-queue push --worker <agent-id> --db events.db --type review.completed --payload '{"files":["src/app.ts"],"issues":0}'
 ```
 
 Include relevant data in the `payload` so downstream agents have context.

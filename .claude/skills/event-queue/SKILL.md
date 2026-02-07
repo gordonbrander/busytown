@@ -13,15 +13,16 @@ A SQLite-backed event queue for inter-worker communication. Workers can push eve
 Push an event to the queue.
 
 ```
-deno task event-queue push --worker <id> [--data <json>]
+deno task event-queue push --worker <id> --type <type> [--payload <json>]
 ```
 
-- Accepts `{ type, payload }` via `--data` or stdin
+- `--type` is required
+- `--payload` is optional JSON (defaults to `{}`)
 - Returns `{ id }` on success
 
 **Example:**
 ```bash
-deno task event-queue push --worker agent-1 --data '{"type":"task.created","payload":{"name":"foo"}}'
+deno task event-queue push --worker agent-1 --type task.created --payload '{"name":"foo"}'
 # Output: {"id":1}
 ```
 
@@ -160,7 +161,7 @@ deno task event-queue check-claim --event 99
 deno task event-queue watch --worker consumer --omit_worker consumer
 
 # Terminal 2: Push events
-deno task event-queue push --worker producer --data '{"type":"ping","payload":{"msg":"hello"}}'
+deno task event-queue push --worker producer --type ping --payload '{"msg":"hello"}'
 ```
 
 **Read all events from the beginning:**

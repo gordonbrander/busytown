@@ -102,9 +102,9 @@ export const buildSystemPrompt = (
 ## Pushing events
 
 To push events to the queue, run:
-  deno task event-queue push --worker ${agent.id} --db ${dbPath} --data '<json>'
+  deno task event-queue push --worker ${agent.id} --db ${dbPath} --type <type> --payload '<json>'
 
-where <json> is a JSON object with "type" and optional "payload" fields.
+where <type> is the event type and <json> is an optional JSON payload (defaults to {}).
 
 ## Claiming events
 

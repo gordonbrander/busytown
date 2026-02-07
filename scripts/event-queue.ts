@@ -15,15 +15,7 @@ import {
   pushEvent,
   updateCursor,
 } from "../lib/event-queue.ts";
-import { die, sleep } from "../lib/utils.ts";
-
-/** Reads JSON input from stdin, returns "{}" if empty. */
-const readStdin = async (): Promise<string> => {
-  const buf = new Uint8Array(1024 * 1024);
-  const n = await Deno.stdin.read(buf);
-  if (n === null) return "{}";
-  return new TextDecoder().decode(buf.subarray(0, n)).trim() || "{}";
-};
+import { sleep } from "../lib/utils.ts";
 
 await new Command()
   .name("event-queue")
@@ -54,22 +46,16 @@ await new Command()
     }
   })
   .command("push")
-  .description("Push an event. Reads { type, payload } from --data or stdin.")
+  .description("Push an event.")
   .option("--worker <id:string>", "Worker ID", { required: true })
-  .option("--data <json:string>", "JSON data with type and payload")
-  .action(async (options) => {
+  .option("--type <type:string>", "Event type", { required: true })
+  .option("--payload <json:string>", "JSON payload", { default: "{}" })
+  .action((options) => {
     const db = openDb(options.db);
     try {
-      const raw = options.data ?? await readStdin();
-      const { type, payload = {} } = JSON.parse(raw) as {
-        type?: string;
-        payload?: unknown;
-      };
-      if (type == undefined) {
-        return die('Input must include a "type" field');
-      }
-      const id = pushEvent(db, options.worker, type, payload);
-      console.log(JSON.stringify({ id }));
+      const payload = JSON.parse(options.payload);
+      const event = pushEvent(db, options.worker, options.type, payload);
+      console.log(JSON.stringify(event));
     } finally {
       db.close();
     }

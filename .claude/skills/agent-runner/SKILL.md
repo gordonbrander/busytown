@@ -21,7 +21,7 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 2. **Push an event** to trigger agents:
 
    ```bash
-   deno task event-queue push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
+   deno task event-queue push --worker user --type file.change --payload '{"path":"src/app.ts"}'
    ```
 
 To run the agent runner in the foreground instead, use `deno task agent-runner run` directly.
