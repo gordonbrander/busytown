@@ -63,8 +63,8 @@ Deno.test("openDb - enables WAL mode", () => {
 
 Deno.test("pushEvent - returns auto-incremented id", () => {
   const db = freshDb();
-  const id1 = pushEvent(db, "w1", "test.event");
-  const id2 = pushEvent(db, "w1", "test.event");
+  const { id: id1 } = pushEvent(db, "w1", "test.event");
+  const { id: id2 } = pushEvent(db, "w1", "test.event");
   assertEquals(id1, 1);
   assertEquals(id2, 2);
   db.close();
@@ -318,7 +318,7 @@ Deno.test("pollEvents - respects limit", () => {
 
 Deno.test("claimEvent - first claim succeeds", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   const claimed = claimEvent(db, "claimer1", eventId);
   assertEquals(claimed, true);
   db.close();
@@ -326,7 +326,7 @@ Deno.test("claimEvent - first claim succeeds", () => {
 
 Deno.test("claimEvent - second claim by different worker fails", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
   const claimed = claimEvent(db, "claimer2", eventId);
   assertEquals(claimed, false);
@@ -335,7 +335,7 @@ Deno.test("claimEvent - second claim by different worker fails", () => {
 
 Deno.test("claimEvent - same worker claiming twice succeeds", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
   const claimed = claimEvent(db, "claimer1", eventId);
   assertEquals(claimed, true);
@@ -344,7 +344,7 @@ Deno.test("claimEvent - same worker claiming twice succeeds", () => {
 
 Deno.test("claimEvent - emits claim.created event on success", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
 
   const events = getEventsSince(db, { filterType: "claim.created" });
@@ -356,7 +356,7 @@ Deno.test("claimEvent - emits claim.created event on success", () => {
 
 Deno.test("claimEvent - does not emit claim.created on failure", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
   claimEvent(db, "claimer2", eventId);
 
@@ -369,14 +369,14 @@ Deno.test("claimEvent - does not emit claim.created on failure", () => {
 
 Deno.test("getClaimant - returns undefined for unclaimed event", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   assertEquals(getClaimant(db, eventId), undefined);
   db.close();
 });
 
 Deno.test("getClaimant - returns claim details for claimed event", () => {
   const db = freshDb();
-  const eventId = pushEvent(db, "w1", "task");
+  const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
 
   const claim = getClaimant(db, eventId);

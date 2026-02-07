@@ -139,12 +139,13 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 /** Invoke an agent as a headless Claude Code instance. */
-export const invokeAgent = async (
+export const runAgent = async (
   agent: AgentDef,
   events: Event[],
   dbPath: string,
   projectRoot: string,
 ): Promise<{ success: boolean; output: string }> => {
+  logger.info("Agent running", { agent: agent.id });
   const systemPrompt = buildSystemPrompt(agent, dbPath);
   const userMessage = JSON.stringify(events);
   const toolArgs = buildToolArgs(agent.allowedTools);
@@ -174,10 +175,10 @@ export const invokeAgent = async (
   const err = textDecoder.decode(stderr);
 
   if (code !== 0) {
-    logger.error("agent exit", { agent: agent.id, code });
-    if (err) logger.error("agent error", { agent: agent.id, stderr: err });
+    logger.error("Agent exit", { agent: agent.id, code });
+    if (err) logger.error("Agent error", { agent: agent.id, stderr: err });
   } else {
-    logger.info("agent completed", { agent: agent.id, output: out });
+    logger.info("Agent completed", { agent: agent.id, output: out });
   }
 
   return { success: code === 0, output: out || err };
@@ -206,6 +207,11 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
     while (true) {
       // Load agents fresh each time, so we pick up new ones
       const agents = await loadAllAgents(agentsDir, config.agentFilter);
+      logger.info("Poll", {
+        db: dbPath,
+        interval_ms: config.pollIntervalMs,
+        agents: agents.map((agent) => agent.id),
+      });
 
       for (const agent of agents) {
         // Poll with per-agent cursor, excluding events from self
@@ -219,7 +225,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
           event_types: matched.map((e) => e.type),
         });
 
-        invokeAgent(agent, matched, dbPath, projectRoot);
+        runAgent(agent, matched, dbPath, projectRoot);
       }
 
       await sleep(config.pollIntervalMs);

@@ -22,10 +22,11 @@ Deno.test("Logger - logs at default info level", () => {
   logger.warn("warn message");
   logger.error("error message");
 
-  assertEquals(driver.entries.length, 3);
-  assertEquals(driver.entries[0].msg, "info message");
-  assertEquals(driver.entries[1].msg, "warn message");
-  assertEquals(driver.entries[2].msg, "error message");
+  assertEquals(driver.entries.length, 4);
+  assertEquals(driver.entries[0].msg, "debug message");
+  assertEquals(driver.entries[1].msg, "info message");
+  assertEquals(driver.entries[2].msg, "warn message");
+  assertEquals(driver.entries[3].msg, "error message");
 });
 
 Deno.test("Logger - respects debug level", () => {

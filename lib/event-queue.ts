@@ -12,9 +12,9 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { sleep } from "./utils.ts";
+import { Logger } from "./logger.ts";
 
-export { sleep };
+const logger = new Logger({ component: "event-queue" });
 
 /**
  * Opens a SQLite database and initializes all schemas.
@@ -26,6 +26,7 @@ export { sleep };
  * @returns The opened database connection
  */
 export const openDb = (path: string): DatabaseSync => {
+  logger.info("Setting up database", { db: path });
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
@@ -111,14 +112,30 @@ export const pushEvent = (
   workerId: string,
   type: string,
   payload: unknown = {},
-): number => {
+): Event => {
   const stmt = db.prepare(
-    "INSERT INTO events (worker_id, type, payload) VALUES (?, ?, ?) RETURNING id",
+    "INSERT INTO events (worker_id, type, payload) VALUES (?, ?, ?) RETURNING id, timestamp",
   );
-  const row = stmt.get(workerId, type, JSON.stringify(payload)) as {
+
+  const { id, timestamp } = stmt.get(
+    workerId,
+    type,
+    JSON.stringify(payload),
+  ) as {
     id: number;
+    timestamp: number;
   };
-  return row.id;
+
+  const event = {
+    id,
+    type,
+    worker_id: workerId,
+    payload,
+    timestamp,
+  };
+
+  logger.info("Push event", event);
+  return event;
 };
 
 /**
@@ -163,7 +180,8 @@ export type GetEventsOptions = {
  */
 export const getEventsSince = (
   db: DatabaseSync,
-  { sinceId = 0, limit = 100, omitWorkerId, filterWorkerId, filterType, tail }: GetEventsOptions = {},
+  { sinceId = 0, limit = 100, omitWorkerId, filterWorkerId, filterType, tail }:
+    GetEventsOptions = {},
 ): Event[] => {
   let sql = "SELECT * FROM events WHERE id > ?";
   const params: (number | string)[] = [sinceId];
