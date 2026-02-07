@@ -136,7 +136,6 @@ export const buildToolArgs = (
 };
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
 
 /** Invoke an agent as a headless Claude Code instance. */
 export const runAgent = async (
@@ -144,7 +143,7 @@ export const runAgent = async (
   events: Event[],
   dbPath: string,
   projectRoot: string,
-): Promise<{ success: boolean; output: string }> => {
+): Promise<void> => {
   logger.info("Agent running", { agent: agent.id });
   const systemPrompt = buildSystemPrompt(agent, dbPath);
   const userMessage = JSON.stringify(events);
@@ -161,8 +160,8 @@ export const runAgent = async (
     ],
     cwd: projectRoot,
     stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
+    stdout: "inherit",
+    stderr: "inherit",
   });
 
   const process = cmd.spawn();
@@ -170,18 +169,13 @@ export const runAgent = async (
   await writer.write(textEncoder.encode(userMessage));
   await writer.close();
 
-  const { code, stdout, stderr } = await process.output();
-  const out = textDecoder.decode(stdout);
-  const err = textDecoder.decode(stderr);
+  const { code } = await process.output();
 
   if (code !== 0) {
     logger.error("Agent exit", { agent: agent.id, code });
-    if (err) logger.error("Agent error", { agent: agent.id, stderr: err });
   } else {
-    logger.info("Agent completed", { agent: agent.id, output: out });
+    logger.info("Agent completed", { agent: agent.id });
   }
-
-  return { success: code === 0, output: out || err };
 };
 
 /** Filter polled events to those matching an agent's listen patterns. */
