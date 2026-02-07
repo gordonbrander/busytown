@@ -13,10 +13,10 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 1. **Start the daemon** (runs in background with auto-restart):
 
    ```bash
-   scripts/daemon.sh start
+   deno task agent-runner start
    ```
 
-   Other daemon commands: `stop`, `restart`, `status`, `logs`
+   Other daemon commands: `stop`, `restart`, `status`
 
 2. **Push an event** to trigger agents:
 
@@ -29,8 +29,18 @@ To run the agent runner in the foreground instead, use `deno task agent-runner r
 ## agent-runner CLI
 
 ```
-deno task agent-runner run [options]
+deno task agent-runner <command> [options]
 ```
+
+| Command | Description |
+|---------|-------------|
+| `run` | Start the agent poll loop (foreground) |
+| `start` | Start the agent runner as a background daemon |
+| `stop` | Stop the background daemon |
+| `restart` | Restart the background daemon |
+| `status` | Check if the daemon is running |
+
+**Runner options** (for `run`, `start`, `restart`):
 
 | Option | Description |
 |--------|-------------|
@@ -38,6 +48,7 @@ deno task agent-runner run [options]
 | `--db <path>` | SQLite database path (default: `events.db`) |
 | `--poll <seconds>` | Poll interval in seconds (default: `5`) |
 | `--agent <name>` | Only run a specific agent (by filename without `.md`) |
+| `--agent-cwd <path>` | Working directory for sub-agents (default: `src/`) |
 | `--help` | Show help message |
 
 ## How It Works

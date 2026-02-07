@@ -13,7 +13,10 @@ import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import { openDb } from "./db.ts";
 import { type Event, pollEvents } from "./event-queue.ts";
+import { Logger } from "./logger.ts";
 import { sleep } from "./utils.ts";
+
+const logger = new Logger({ component: "agent-runner" });
 
 export type AgentDef = {
   id: string;
@@ -189,25 +192,11 @@ export const invokeAgent = async (
   const err = new TextDecoder().decode(stderr);
 
   if (code !== 0) {
-    console.error(`[${agent.id}] claude exited with code ${code}`);
-    if (err) console.error(`[${agent.id}] stderr: ${err}`);
+    logger.error("agent_exit", { agent: agent.id, code });
+    if (err) logger.error("agent_stderr", { agent: agent.id, stderr: err });
   }
 
   return { success: code === 0, output: out || err };
-};
-
-/** Format an agent invocation result for console output. */
-export const formatAgentOutput = (
-  agentId: string,
-  success: boolean,
-  output: string,
-): string => {
-  const status = success ? "completed" : "failed";
-  const header = `[${agentId}] ${status}`;
-  const trimmed = output.trim();
-  if (!trimmed) return header;
-  const indented = trimmed.split("\n").map((l) => `  ${l}`).join("\n");
-  return `${header}\n${indented}`;
 };
 
 /** Filter polled events to those matching an agent's listen patterns. */
@@ -226,7 +215,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
   const running = new Set<string>();
   const knownAgents = new Set<string>();
 
-  console.log(`Polling ${dbPath} every ${config.pollIntervalMs}ms...\n`);
+  logger.info("poll_loop_start", { db: dbPath, interval_ms: config.pollIntervalMs });
 
   try {
     while (true) {
@@ -235,12 +224,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
       // Log newly discovered agents
       for (const a of agents) {
         if (knownAgents.has(a.id)) continue;
-        const toolInfo = a.allowedTools.includes("*")
-          ? "tools: all"
-          : `tools: [${a.allowedTools.join(", ")}]`;
-        console.log(
-          `  ${a.id} — listens: [${a.listen.join(", ")}] — ${toolInfo}`,
-        );
+        logger.info("agent_loaded", { agent: a.id, listen: a.listen, tools: a.allowedTools });
         knownAgents.add(a.id);
       }
 
@@ -253,19 +237,23 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
         const matched = filterMatchedEvents(allEvents, agent);
         if (matched.length === 0) continue;
 
-        console.log(
-          `[${agent.id}] dispatching ${matched.length} event(s): ${
-            matched.map((e) => e.type).join(", ")
-          }`,
-        );
+        logger.info("dispatch", {
+          agent: agent.id,
+          count: matched.length,
+          event_types: matched.map((e) => e.type),
+        });
 
         running.add(agent.id);
         invokeAgent(agent, matched, dbPath, projectRoot)
           .then(({ success, output }) => {
-            console.log(formatAgentOutput(agent.id, success, output));
+            if (success) {
+              logger.info("agent_completed", { agent: agent.id, output });
+            } else {
+              logger.error("agent_failed", { agent: agent.id, output });
+            }
           })
           .catch((err) => {
-            console.error(`[${agent.id}] error: ${err}`);
+            logger.error("agent_error", { agent: agent.id, error: String(err) });
           })
           .finally(() => {
             running.delete(agent.id);
