@@ -1,7 +1,8 @@
 {
   "tasks": {
     "event-queue": "deno run --allow-read --allow-write scripts/event-queue.ts",
-    "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts"
+    "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts",
+    "plan-request": "bash scripts/plan-request.sh"
   },
   "imports": {
     "@cliffy/command": "jsr:@cliffy/command@1.0.0-rc.8",

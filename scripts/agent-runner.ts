@@ -46,7 +46,11 @@ async function removePid(): Promise<void> {
 
 async function isAlive(pid: number): Promise<boolean> {
   try {
-    const cmd = new Deno.Command("kill", { args: ["-0", String(pid)], stderr: "null", stdout: "null" });
+    const cmd = new Deno.Command("kill", {
+      args: ["-0", String(pid)],
+      stderr: "null",
+      stdout: "null",
+    });
     const { success } = await cmd.output();
     return success;
   } catch {
@@ -66,7 +70,11 @@ async function getRunningPid(): Promise<number | null> {
 async function killProcessTree(pid: number): Promise<void> {
   // Kill children first (the deno runner), then the parent loop
   try {
-    const pkill = new Deno.Command("pkill", { args: ["-P", String(pid)], stderr: "null", stdout: "null" });
+    const pkill = new Deno.Command("pkill", {
+      args: ["-P", String(pid)],
+      stderr: "null",
+      stdout: "null",
+    });
     await pkill.output();
   } catch {
     // ignore
@@ -115,7 +123,14 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
   }
 
   // Build the shell command that execs into deno running _daemon
-  const denoArgs = ["run", "--allow-read", "--allow-write", "--allow-run", "scripts/agent-runner.ts", "_daemon"];
+  const denoArgs = [
+    "run",
+    "--allow-read",
+    "--allow-write",
+    "--allow-run",
+    "scripts/agent-runner.ts",
+    "_daemon",
+  ];
   const runnerArgs = serializeRunnerArgs(options);
   const allArgs = [...denoArgs, ...runnerArgs];
   const shellCmd = "exec deno " + allArgs.map(shellEscape).join(" ");
@@ -151,22 +166,38 @@ async function stopDaemon(): Promise<void> {
 
 const runCmd = new Command()
   .description("Start the agent poll loop (foreground).")
-  .option("--agents-dir <path:string>", "Directory containing agent .md files", { default: "agents/" })
+  .option(
+    "--agents-dir <path:string>",
+    "Directory containing agent .md files",
+    { default: "agents/" },
+  )
   .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", { default: "5" })
+  .option("--poll <seconds:string>", "Poll interval in seconds", {
+    default: "5",
+  })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", { default: "src/" })
+  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+    default: ".",
+  })
   .action(async (options) => {
     await execRunPollLoop(options);
   });
 
 const startCmd = new Command()
   .description("Start the agent runner as a background daemon.")
-  .option("--agents-dir <path:string>", "Directory containing agent .md files", { default: "agents/" })
+  .option(
+    "--agents-dir <path:string>",
+    "Directory containing agent .md files",
+    { default: "agents/" },
+  )
   .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", { default: "5" })
+  .option("--poll <seconds:string>", "Poll interval in seconds", {
+    default: "5",
+  })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", { default: "src/" })
+  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+    default: ".",
+  })
   .action(async (options) => {
     await startDaemon(options);
   });
@@ -179,11 +210,19 @@ const stopCmd = new Command()
 
 const restartCmd = new Command()
   .description("Restart the background daemon.")
-  .option("--agents-dir <path:string>", "Directory containing agent .md files", { default: "agents/" })
+  .option(
+    "--agents-dir <path:string>",
+    "Directory containing agent .md files",
+    { default: "agents/" },
+  )
   .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", { default: "5" })
+  .option("--poll <seconds:string>", "Poll interval in seconds", {
+    default: "5",
+  })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", { default: "src/" })
+  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+    default: ".",
+  })
   .action(async (options) => {
     await stopDaemon();
     // Brief pause to let process fully exit
@@ -205,11 +244,19 @@ const statusCmd = new Command()
 const daemonCmd = new Command()
   .description("Internal daemon loop (do not call directly).")
   .hidden()
-  .option("--agents-dir <path:string>", "Directory containing agent .md files", { default: "agents/" })
+  .option(
+    "--agents-dir <path:string>",
+    "Directory containing agent .md files",
+    { default: "agents/" },
+  )
   .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", { default: "5" })
+  .option("--poll <seconds:string>", "Poll interval in seconds", {
+    default: "5",
+  })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", { default: "src/" })
+  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+    default: ".",
+  })
   .action(async (options) => {
     // Auto-restart loop, same as daemon.sh's _loop
     while (true) {
