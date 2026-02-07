@@ -154,8 +154,9 @@ export const runAgent = async (
       "--print",
       "--system-prompt",
       systemPrompt,
+      "--verbose",
       "--output-format",
-      "text",
+      "stream-json",
       ...toolArgs,
     ],
     cwd: projectRoot,
@@ -169,7 +170,7 @@ export const runAgent = async (
   await writer.write(textEncoder.encode(userMessage));
   await writer.close();
 
-  const { code } = await process.output();
+  const { code } = await process.status;
 
   if (code !== 0) {
     logger.error("Agent exit", { agent: agent.id, code });
