@@ -13,8 +13,8 @@ import {
   pushEvent,
   sleep,
   updateCursor,
-} from "./lib/event-queue.ts";
-import { die, requireOpt } from "./lib/utils.ts";
+} from "../lib/event-queue.ts";
+import { die, requireOpt } from "../lib/utils.ts";
 
 // --- CLI ---
 

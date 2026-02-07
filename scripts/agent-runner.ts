@@ -5,8 +5,8 @@
  */
 
 import { parseArgs } from "node:util";
-import { runPollLoop } from "./lib/agent-runner.ts";
-import { die } from "./lib/utils.ts";
+import { runPollLoop } from "../lib/agent-runner.ts";
+import { die } from "../lib/utils.ts";
 
 // --- CLI ---
 

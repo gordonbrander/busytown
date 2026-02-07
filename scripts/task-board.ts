@@ -5,7 +5,7 @@
  */
 
 import { parseArgs } from "node:util";
-import { openDb } from "./lib/db.ts";
+import { openDb } from "../lib/db.ts";
 import {
   addTask,
   claimTask,
@@ -16,8 +16,8 @@ import {
   type TaskStatus,
   unclaimTask,
   updateTask,
-} from "./lib/task-board.ts";
-import { die, requireOpt } from "./lib/utils.ts";
+} from "../lib/task-board.ts";
+import { die, requireOpt } from "../lib/utils.ts";
 
 // --- CLI ---
 
