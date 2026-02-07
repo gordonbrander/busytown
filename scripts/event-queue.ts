@@ -92,12 +92,13 @@ await new Command()
     .option("--since <id:string>", "Event ID to start after", { required: true })
     .option("--limit <n:string>", "Maximum number of events")
     .option("--omit-worker <id:string>", "Omit events from this worker")
+    .option("--worker <id:string>", "Only show events from this worker")
     .action((options) => {
       const db = openDb(options.db);
       try {
         const sinceId = parseInt(options.since, 10);
         const limit = options.limit ? parseInt(options.limit, 10) : 100;
-        const events = getEventsSince(db, sinceId, limit, options.omitWorker);
+        const events = getEventsSince(db, sinceId, limit, options.omitWorker, options.worker);
         for (const event of events) {
           console.log(JSON.stringify(event));
         }

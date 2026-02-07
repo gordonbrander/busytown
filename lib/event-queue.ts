@@ -82,6 +82,7 @@ export const getSince = (db: DatabaseSync, workerId: string): number => {
  * @param sinceId - Return events with ID greater than this value
  * @param limit - Maximum number of events to return (default: 100)
  * @param omitWorkerId - Optional worker ID to exclude from results
+ * @param filterWorkerId - Optional worker ID to include exclusively
  * @returns Array of events ordered by ID ascending
  */
 export const getEventsSince = (
@@ -89,15 +90,22 @@ export const getEventsSince = (
   sinceId: number,
   limit = 100,
   omitWorkerId?: string,
+  filterWorkerId?: string,
 ): Event[] => {
-  const sql = omitWorkerId
-    ? "SELECT * FROM events WHERE id > ? AND worker_id != ? ORDER BY id ASC LIMIT ?"
-    : "SELECT * FROM events WHERE id > ? ORDER BY id ASC LIMIT ?";
+  let sql = "SELECT * FROM events WHERE id > ?";
+  const params: (number | string)[] = [sinceId];
+  if (omitWorkerId) {
+    sql += " AND worker_id != ?";
+    params.push(omitWorkerId);
+  }
+  if (filterWorkerId) {
+    sql += " AND worker_id = ?";
+    params.push(filterWorkerId);
+  }
+  sql += " ORDER BY id ASC LIMIT ?";
+  params.push(limit);
   const stmt = db.prepare(sql);
-  const rows =
-    (omitWorkerId
-      ? stmt.all(sinceId, omitWorkerId, limit)
-      : stmt.all(sinceId, limit)) as RawEventRow[];
+  const rows = stmt.all(...params) as RawEventRow[];
   return rows.map((r) => ({ ...r, payload: JSON.parse(r.payload) }));
 };
 

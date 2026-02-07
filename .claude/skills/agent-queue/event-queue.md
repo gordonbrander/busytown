@@ -63,8 +63,11 @@ deno task event-queue since --worker agent-1
 Fetch events after a given ID. Outputs ndjson (one event per line).
 
 ```
-deno task event-queue events --since <id> [--limit <n>] [--omit_worker <id>]
+deno task event-queue events --since <id> [--limit <n>] [--omit-worker <id>] [--worker <id>]
 ```
+
+- `--worker <id>` — only show events from this worker
+- `--omit-worker <id>` — exclude events from this worker
 
 **Example:**
 ```bash
@@ -72,6 +75,9 @@ deno task event-queue events --since 0 --limit 10
 # Output (one event per line):
 # {"id":1,"timestamp":1234567890,"type":"task.created","worker_id":"agent-1","payload":{}}
 # {"id":2,"timestamp":1234567891,"type":"task.done","worker_id":"agent-1","payload":{}}
+
+# Filter to a specific worker:
+deno task event-queue events --since 0 --worker agent-1
 ```
 
 ### cursor
