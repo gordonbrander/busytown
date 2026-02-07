@@ -5,14 +5,75 @@
  * for new events using cursor-based pagination. Each worker maintains its own
  * cursor position, enabling reliable at-least-once delivery.
  *
+ * Also handles database initialization: opens SQLite with WAL mode and creates
+ * all schemas (events, worker_cursors, claims).
+ *
  * @module event-queue
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { openDb, transaction } from "./db.ts";
 import { sleep } from "./utils.ts";
 
-export { openDb, sleep };
+export { sleep };
+
+/**
+ * Opens a SQLite database and initializes all schemas.
+ *
+ * Enables WAL mode, busy timeout, and foreign keys, then creates the
+ * `events`, `worker_cursors`, and `claims` tables if they don't exist.
+ *
+ * @param path - Path to the SQLite database file
+ * @returns The opened database connection
+ */
+export const openDb = (path: string): DatabaseSync => {
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA busy_timeout = 5000");
+  db.exec("PRAGMA foreign_keys = ON");
+
+  // Events schema
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp INTEGER NOT NULL DEFAULT (unixepoch()),
+      type TEXT NOT NULL,
+      worker_id TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}'
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS worker_cursors (
+      worker_id TEXT PRIMARY KEY,
+      since INTEGER NOT NULL DEFAULT 0,
+      timestamp INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `);
+
+  // Claims schema
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS claims (
+      event_id INTEGER PRIMARY KEY,
+      worker_id TEXT NOT NULL,
+      claimed_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `);
+
+  return db;
+};
+
+/** Run a function inside a BEGIN/COMMIT transaction with ROLLBACK on error. */
+const transaction = <T>(db: DatabaseSync, fn: () => T): T => {
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+};
 
 /**
  * A parsed event with deserialized payload.

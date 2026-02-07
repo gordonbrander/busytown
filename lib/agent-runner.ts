@@ -11,8 +11,7 @@
 
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
-import { openDb } from "./db.ts";
-import { type Event, pollEvents } from "./event-queue.ts";
+import { type Event, openDb, pollEvents } from "./event-queue.ts";
 import { Logger } from "./logger.ts";
 import { sleep } from "./utils.ts";
 
