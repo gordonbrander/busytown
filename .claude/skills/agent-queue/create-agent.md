@@ -130,7 +130,7 @@ build.failed
 The agent runner injects the `event-queue.ts push` command into each agent's system prompt. Agents can push events by running:
 
 ```bash
-./event-queue.ts push --worker <agent-id> --db events.db --data '{"type":"review.completed","payload":{"files":["src/app.ts"],"issues":0}}'
+scripts/event-queue.ts push --worker <agent-id> --db events.db --data '{"type":"review.completed","payload":{"files":["src/app.ts"],"issues":0}}'
 ```
 
 Include relevant data in the `payload` so downstream agents have context.

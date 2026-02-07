@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SKILL_DIR/../../.." && pwd)"
-RUNNER="$SKILL_DIR/agent-runner.ts"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RUNNER="$SCRIPT_DIR/agent-runner.ts"
 PID_FILE="$PROJECT_DIR/.agent-runner.pid"
 LOG_FILE="$PROJECT_DIR/.agent-runner.log"
 

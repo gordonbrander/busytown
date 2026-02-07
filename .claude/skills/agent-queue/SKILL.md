@@ -13,7 +13,7 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 1. **Start the daemon** (runs in background with auto-restart):
 
    ```bash
-   ./daemon.sh start
+   scripts/daemon.sh start
    ```
 
    Other daemon commands: `stop`, `restart`, `status`, `logs`
@@ -21,10 +21,10 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 2. **Push an event** to trigger agents:
 
    ```bash
-   ./event-queue.ts push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
+   scripts/event-queue.ts push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
    ```
 
-To run the agent runner in the foreground instead, use `./agent-runner.ts run` directly.
+To run the agent runner in the foreground instead, use `scripts/agent-runner.ts run` directly.
 
 ## agent-runner.ts CLI
 
@@ -69,19 +69,19 @@ Agents can coordinate work through a shared task board. Tasks can be created, cl
 
 ```bash
 # Add a task
-./task-board.ts add --worker user --title "Review PR #42"
+scripts/task-board.ts add --worker user --title "Review PR #42"
 
 # List open tasks
-./task-board.ts list --status open
+scripts/task-board.ts list --status open
 
 # Claim a task (atomic — only one agent wins)
-./task-board.ts claim --worker agent-1 --id 1
+scripts/task-board.ts claim --worker agent-1 --id 1
 
 # Mark done (only claim holder can update)
-./task-board.ts update --worker agent-1 --id 1 --status done
+scripts/task-board.ts update --worker agent-1 --id 1 --status done
 
 # View summary
-./task-board.ts summary
+scripts/task-board.ts summary
 ```
 
 See [Task Board CLI](task-board.md) for the full reference.
