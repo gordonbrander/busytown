@@ -5,6 +5,7 @@
     "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts"
   },
   "imports": {
+    "@cliffy/command": "jsr:@cliffy/command@1.0.0-rc.8",
     "@std/assert": "jsr:@std/assert@1",
     "@std/front-matter": "jsr:@std/front-matter@^1.0.9"
   }

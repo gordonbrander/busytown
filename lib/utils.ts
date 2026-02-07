@@ -7,9 +7,3 @@ export const die = (msg: string): never => {
   console.error(msg);
   Deno.exit(1);
 };
-
-/** Returns the value or exits with a missing option error. */
-export const requireOpt = (val: string | undefined, name: string): string => {
-  if (!val) return die(`Missing required option: --${name}`);
-  return val;
-};

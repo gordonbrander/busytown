@@ -4,57 +4,26 @@
  * @module agent-runner
  */
 
-import { parseArgs } from "node:util";
+import { Command } from "@cliffy/command";
 import { runPollLoop } from "../lib/agent-runner.ts";
-import { die } from "../lib/utils.ts";
 
-// --- CLI ---
-
-const USAGE = `Usage: agent-runner run [options]
-
-Commands:
-  run    Start the agent poll loop
-
-Options:
-  --agents-dir <path>   Directory containing agent .md files (default: agents/)
-  --db <path>           Database path (default: events.db)
-  --poll <seconds>      Poll interval in seconds (default: 5)
-  --agent <name>        Only run a specific agent
-  --agent-cwd <path>    Working directory for sub-agents (default: src/)
-  --help                Show this help`;
-
-const cli = async (): Promise<void> => {
-  const { values, positionals } = parseArgs({
-    args: Deno.args,
-    options: {
-      "agents-dir": { type: "string", default: "agents/" },
-      db: { type: "string", default: "events.db" },
-      poll: { type: "string", default: "5" },
-      agent: { type: "string" },
-      "agent-cwd": { type: "string", default: "src/" },
-      help: { type: "boolean", short: "h" },
-    },
-    allowPositionals: true,
-  });
-
-  if (values.help || positionals.length === 0) {
-    console.log(USAGE);
-    Deno.exit(0);
-  }
-
-  const command = positionals[0];
-
-  if (command !== "run") die(`Unknown command: ${command}\n\n${USAGE}`);
-
-  await runPollLoop({
-    agentsDir: values["agents-dir"]!,
-    dbPath: values.db!,
-    pollIntervalMs: parseFloat(values.poll!) * 1000,
-    agentFilter: values.agent,
-    agentCwd: values["agent-cwd"],
-  });
-};
-
-if (import.meta.main) {
-  await cli();
-}
+await new Command()
+  .name("agent-runner")
+  .description("CLI wrapper for the agent runner.")
+  .command("run")
+    .description("Start the agent poll loop.")
+    .option("--agents-dir <path:string>", "Directory containing agent .md files", { default: "agents/" })
+    .option("--db <path:string>", "Database path", { default: "events.db" })
+    .option("--poll <seconds:string>", "Poll interval in seconds", { default: "5" })
+    .option("--agent <name:string>", "Only run a specific agent")
+    .option("--agent-cwd <path:string>", "Working directory for sub-agents", { default: "src/" })
+    .action(async (options) => {
+      await runPollLoop({
+        agentsDir: options.agentsDir,
+        dbPath: options.db,
+        pollIntervalMs: parseFloat(options.poll) * 1000,
+        agentFilter: options.agent,
+        agentCwd: options.agentCwd,
+      });
+    })
+  .parse(Deno.args);

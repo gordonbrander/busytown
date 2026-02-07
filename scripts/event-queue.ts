@@ -4,7 +4,7 @@
  * @module event-queue
  */
 
-import { parseArgs } from "node:util";
+import { Command } from "@cliffy/command";
 import {
   getEventsSince,
   getSince,
@@ -14,31 +14,7 @@ import {
   sleep,
   updateCursor,
 } from "../lib/event-queue.ts";
-import { die, requireOpt } from "../lib/utils.ts";
-
-// --- CLI ---
-
-const USAGE = `Usage: event-queue <command> [options]
-
-Commands:
-  watch    Poll for new events and stream ndjson to stdout.
-           --worker <id> [--poll <seconds>] [--omit_worker_id <id>]
-
-  push     Push an event. Reads { type, payload } from --data or stdin.
-           --worker <id> [--data <json>]
-
-  since    Get the cursor for a worker.
-           --worker <id>
-
-  events   Get events after a given id.
-           --since <id> [--limit <n>] [--omit_worker_id <id>]
-
-  cursor   Set the cursor for a worker.
-           --worker <id> --set <event_id>
-
-Global options:
-  --db <path>   Database path (default: events.db)
-  --help        Show this help`;
+import { die } from "../lib/utils.ts";
 
 /** Reads JSON input from stdin, returns "{}" if empty. */
 const readStdin = async (): Promise<string> => {
@@ -48,52 +24,42 @@ const readStdin = async (): Promise<string> => {
   return new TextDecoder().decode(buf.subarray(0, n)).trim() || "{}";
 };
 
-/** CLI entrypoint: parses args and dispatches to subcommands. */
-const cli = async () => {
-  const { values, positionals } = parseArgs({
-    args: Deno.args,
-    options: {
-      db: { type: "string", default: "events.db" },
-      worker: { type: "string", short: "w" },
-      data: { type: "string", short: "d" },
-      since: { type: "string", short: "s" },
-      set: { type: "string" },
-      omit_worker: { type: "string" },
-      poll: { type: "string", default: "3" },
-      limit: { type: "string", short: "l" },
-      help: { type: "boolean", short: "h" },
-    },
-    allowPositionals: true,
-  });
+await new Command()
+  .name("event-queue")
+  .description("CLI wrapper for the event queue.")
+  .globalOption("--db <path:string>", "Database path", { default: "events.db" })
 
-  if (values.help || positionals.length === 0) {
-    console.log(USAGE);
-    Deno.exit(0);
-  }
-
-  const command = positionals[0];
-  const db = openDb(values.db!);
-
-  try {
-    switch (command) {
-      case "watch": {
-        const worker = requireOpt(values.worker, "worker");
-        const intervalMs = parseFloat(values.poll!) * 1000;
+  .command("watch")
+    .description("Poll for new events and stream ndjson to stdout.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--poll <seconds:string>", "Poll interval in seconds", { default: "3" })
+    .option("--omit-worker <id:string>", "Omit events from this worker")
+    .action(async (options) => {
+      const db = openDb(options.db);
+      try {
+        const intervalMs = parseFloat(options.poll) * 1000;
         const encoder = new TextEncoder();
         const write = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
-
         while (true) {
-          const events = pollEvents(db, worker, 100, values.omit_worker);
+          const events = pollEvents(db, options.worker, 100, options.omitWorker);
           for (const event of events) {
             write(JSON.stringify(event) + "\n");
           }
           await sleep(intervalMs);
         }
+      } finally {
+        db.close();
       }
+    })
 
-      case "push": {
-        const worker = requireOpt(values.worker, "worker");
-        const raw = values.data ?? await readStdin();
+  .command("push")
+    .description("Push an event. Reads { type, payload } from --data or stdin.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--data <json:string>", "JSON data with type and payload")
+    .action(async (options) => {
+      const db = openDb(options.db);
+      try {
+        const raw = options.data ?? await readStdin();
         const { type, payload = {} } = JSON.parse(raw) as {
           type?: string;
           payload?: unknown;
@@ -101,49 +67,58 @@ const cli = async () => {
         if (type == undefined) {
           return die('Input must include a "type" field');
         }
-        const id = pushEvent(db, worker, type, payload);
+        const id = pushEvent(db, options.worker, type, payload);
         console.log(JSON.stringify({ id }));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "since": {
-        const worker = requireOpt(values.worker, "worker");
-        const since = getSince(db, worker);
-        console.log(JSON.stringify({ worker_id: worker, since }));
-        return;
+  .command("since")
+    .description("Get the cursor for a worker.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const since = getSince(db, options.worker);
+        console.log(JSON.stringify({ worker_id: options.worker, since }));
+      } finally {
+        db.close();
       }
+    })
 
-      case "events": {
-        const sinceId = parseInt(requireOpt(values.since, "since"), 10);
-        const limit = values.limit ? parseInt(values.limit, 10) : 100;
-        const events = getEventsSince(
-          db,
-          sinceId,
-          limit,
-          values.omit_worker,
-        );
+  .command("events")
+    .description("Get events after a given id.")
+    .option("--since <id:string>", "Event ID to start after", { required: true })
+    .option("--limit <n:string>", "Maximum number of events")
+    .option("--omit-worker <id:string>", "Omit events from this worker")
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const sinceId = parseInt(options.since, 10);
+        const limit = options.limit ? parseInt(options.limit, 10) : 100;
+        const events = getEventsSince(db, sinceId, limit, options.omitWorker);
         for (const event of events) {
           console.log(JSON.stringify(event));
         }
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "cursor": {
-        const worker = requireOpt(values.worker, "worker");
-        const sinceId = parseInt(requireOpt(values.set, "set"), 10);
-        updateCursor(db, worker, sinceId);
-        console.log(JSON.stringify({ worker_id: worker, since: sinceId }));
-        return;
+  .command("cursor")
+    .description("Set the cursor for a worker.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--set <event_id:string>", "Event ID to set cursor to", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const sinceId = parseInt(options.set, 10);
+        updateCursor(db, options.worker, sinceId);
+        console.log(JSON.stringify({ worker_id: options.worker, since: sinceId }));
+      } finally {
+        db.close();
       }
+    })
 
-      default:
-        return die(`Unknown command: ${command}\n\n${USAGE}`);
-    }
-  } finally {
-    db.close();
-  }
-};
-
-if (import.meta.main) {
-  await cli();
-}
+  .parse(Deno.args);

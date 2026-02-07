@@ -4,7 +4,7 @@
  * @module task-board
  */
 
-import { parseArgs } from "node:util";
+import { Command } from "@cliffy/command";
 import { openDb } from "../lib/db.ts";
 import {
   addTask,
@@ -17,72 +17,22 @@ import {
   unclaimTask,
   updateTask,
 } from "../lib/task-board.ts";
-import { die, requireOpt } from "../lib/utils.ts";
 
-// --- CLI ---
+await new Command()
+  .name("task-board")
+  .description("CLI wrapper for the task board.")
+  .globalOption("--db <path:string>", "Database path", { default: "events.db" })
 
-const USAGE = `Usage: task-board <command> [options]
-
-Commands:
-  list     List tasks (ndjson output).
-           [--status <s>] [--claimed-by <id>]
-
-  add      Add a new task.
-           --worker <id> --title <text> [--content <text>] [--meta <json>]
-
-  get      Get a task by ID.
-           --id <n>
-
-  update   Update a claimed task.
-           --worker <id> --id <n> [--title <text>] [--content <text>]
-           [--status <s>] [--meta <json>]
-
-  delete   Delete a claimed task.
-           --worker <id> --id <n>
-
-  claim    Claim an open task (compare-and-swap).
-           --worker <id> --id <n>
-
-  unclaim  Release a claimed task.
-           --worker <id> --id <n>
-
-  summary  Show task counts by status.
-
-Global options:
-  --db <path>   Database path (default: events.db)
-  --help        Show this help`;
-
-const cli = () => {
-  const { values, positionals } = parseArgs({
-    args: Deno.args,
-    options: {
-      db: { type: "string", default: "events.db" },
-      worker: { type: "string", short: "w" },
-      id: { type: "string" },
-      title: { type: "string" },
-      content: { type: "string" },
-      status: { type: "string" },
-      meta: { type: "string" },
-      "claimed-by": { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
-    allowPositionals: true,
-  });
-
-  if (values.help || positionals.length === 0) {
-    console.log(USAGE);
-    Deno.exit(0);
-  }
-
-  const command = positionals[0];
-  const db = openDb(values.db!);
-
-  try {
-    switch (command) {
-      case "list": {
+  .command("list")
+    .description("List tasks (ndjson output).")
+    .option("--status <s:string>", "Filter by status")
+    .option("--claimed-by <id:string>", "Filter by claimed worker")
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
         const filter: { status?: TaskStatus; claimed_by?: string } = {};
-        if (values.status) filter.status = values.status as TaskStatus;
-        if (values["claimed-by"]) filter.claimed_by = values["claimed-by"];
+        if (options.status) filter.status = options.status as TaskStatus;
+        if (options.claimedBy) filter.claimed_by = options.claimedBy;
         const tasks = listTasks(
           db,
           Object.keys(filter).length > 0 ? filter : undefined,
@@ -90,96 +40,141 @@ const cli = () => {
         for (const task of tasks) {
           console.log(JSON.stringify(task));
         }
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "add": {
-        const worker = requireOpt(values.worker, "worker");
-        const title = requireOpt(values.title, "title");
-        const meta = values.meta ? JSON.parse(values.meta) : undefined;
-        const task = addTask(db, worker, title, values.content, meta);
+  .command("add")
+    .description("Add a new task.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--title <text:string>", "Task title", { required: true })
+    .option("--content <text:string>", "Task content")
+    .option("--meta <json:string>", "Task metadata as JSON")
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const meta = options.meta ? JSON.parse(options.meta) : undefined;
+        const task = addTask(db, options.worker, options.title, options.content, meta);
         console.log(JSON.stringify(task));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "get": {
-        const id = parseInt(requireOpt(values.id, "id"), 10);
+  .command("get")
+    .description("Get a task by ID.")
+    .option("--id <n:string>", "Task ID", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const id = parseInt(options.id, 10);
         const task = getTask(db, id);
         if (!task) {
           console.error(JSON.stringify({ error: "not_found" }));
           Deno.exit(1);
         }
         console.log(JSON.stringify(task));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "update": {
-        const worker = requireOpt(values.worker, "worker");
-        const id = parseInt(requireOpt(values.id, "id"), 10);
+  .command("update")
+    .description("Update a claimed task.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--id <n:string>", "Task ID", { required: true })
+    .option("--title <text:string>", "New title")
+    .option("--content <text:string>", "New content")
+    .option("--status <s:string>", "New status")
+    .option("--meta <json:string>", "New metadata as JSON")
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const id = parseInt(options.id, 10);
         const updates: Record<string, unknown> = {};
-        if (values.title !== undefined) updates.title = values.title;
-        if (values.content !== undefined) updates.content = values.content;
-        if (values.status !== undefined) updates.status = values.status;
-        if (values.meta !== undefined) updates.meta = JSON.parse(values.meta);
-        const task = updateTask(db, worker, id, updates);
+        if (options.title !== undefined) updates.title = options.title;
+        if (options.content !== undefined) updates.content = options.content;
+        if (options.status !== undefined) updates.status = options.status;
+        if (options.meta !== undefined) updates.meta = JSON.parse(options.meta);
+        const task = updateTask(db, options.worker, id, updates);
         if (!task) {
           console.error(JSON.stringify({ error: "update_failed" }));
           Deno.exit(1);
         }
         console.log(JSON.stringify(task));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "delete": {
-        const worker = requireOpt(values.worker, "worker");
-        const id = parseInt(requireOpt(values.id, "id"), 10);
-        const ok = deleteTask(db, worker, id);
+  .command("delete")
+    .description("Delete a claimed task.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--id <n:string>", "Task ID", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const id = parseInt(options.id, 10);
+        const ok = deleteTask(db, options.worker, id);
         if (!ok) {
           console.error(JSON.stringify({ error: "delete_failed" }));
           Deno.exit(1);
         }
         console.log(JSON.stringify({ deleted: true, task_id: id }));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "claim": {
-        const worker = requireOpt(values.worker, "worker");
-        const id = parseInt(requireOpt(values.id, "id"), 10);
-        const task = claimTask(db, worker, id);
+  .command("claim")
+    .description("Claim an open task (compare-and-swap).")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--id <n:string>", "Task ID", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const id = parseInt(options.id, 10);
+        const task = claimTask(db, options.worker, id);
         if (!task) {
           console.error(JSON.stringify({ error: "claim_failed" }));
           Deno.exit(1);
         }
         console.log(JSON.stringify(task));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "unclaim": {
-        const worker = requireOpt(values.worker, "worker");
-        const id = parseInt(requireOpt(values.id, "id"), 10);
-        const task = unclaimTask(db, worker, id);
+  .command("unclaim")
+    .description("Release a claimed task.")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--id <n:string>", "Task ID", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const id = parseInt(options.id, 10);
+        const task = unclaimTask(db, options.worker, id);
         if (!task) {
           console.error(JSON.stringify({ error: "unclaim_failed" }));
           Deno.exit(1);
         }
         console.log(JSON.stringify(task));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      case "summary": {
+  .command("summary")
+    .description("Show task counts by status.")
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
         const summary = getTaskSummary(db);
         console.log(JSON.stringify(summary));
-        return;
+      } finally {
+        db.close();
       }
+    })
 
-      default:
-        return die(`Unknown command: ${command}\n\n${USAGE}`);
-    }
-  } finally {
-    db.close();
-  }
-};
-
-if (import.meta.main) {
-  cli();
-}
+  .parse(Deno.args);
