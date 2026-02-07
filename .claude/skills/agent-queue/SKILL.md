@@ -21,15 +21,15 @@ Run collaborative AI agents that communicate through a shared event queue. Each 
 2. **Push an event** to trigger agents:
 
    ```bash
-   scripts/event-queue.ts push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
+   deno task event-queue push --worker user --data '{"type":"file.change","payload":{"path":"src/app.ts"}}'
    ```
 
-To run the agent runner in the foreground instead, use `scripts/agent-runner.ts run` directly.
+To run the agent runner in the foreground instead, use `deno task agent-runner run` directly.
 
-## agent-runner.ts CLI
+## agent-runner CLI
 
 ```
-agent-runner.ts run [options]
+deno task agent-runner run [options]
 ```
 
 | Option | Description |
@@ -69,25 +69,25 @@ Agents can coordinate work through a shared task board. Tasks can be created, cl
 
 ```bash
 # Add a task
-scripts/task-board.ts add --worker user --title "Review PR #42"
+deno task task-board add --worker user --title "Review PR #42"
 
 # List open tasks
-scripts/task-board.ts list --status open
+deno task task-board list --status open
 
 # Claim a task (atomic — only one agent wins)
-scripts/task-board.ts claim --worker agent-1 --id 1
+deno task task-board claim --worker agent-1 --id 1
 
 # Mark done (only claim holder can update)
-scripts/task-board.ts update --worker agent-1 --id 1 --status done
+deno task task-board update --worker agent-1 --id 1 --status done
 
 # View summary
-scripts/task-board.ts summary
+deno task task-board summary
 ```
 
 See [Task Board CLI](task-board.md) for the full reference.
 
 ## Supporting References
 
-- [Event Queue CLI](event-queue.md) — the underlying `event-queue.ts` commands (`push`, `watch`, `since`, `events`, `cursor`)
+- [Event Queue CLI](event-queue.md) — the underlying `deno task event-queue` commands (`push`, `watch`, `since`, `events`, `cursor`)
 - [Task Board CLI](task-board.md) — shared task board for multi-agent work coordination
 - [Creating Agents](create-agent.md) — guide for defining new agent files

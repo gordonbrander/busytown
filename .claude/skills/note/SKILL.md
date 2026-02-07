@@ -40,7 +40,7 @@ When the user invokes this skill with `/note <content>`:
 
 5. **Use the agent-queue skill to push a new event to the event queue**:
   ```bash
-  ./event-queue.ts push --worker note --data '{"type":"file.created","payload":{"filename":"..."}}'
+  deno task event-queue push --worker note --data '{"type":"file.created","payload":{"filename":"..."}}'
   ```
 
 

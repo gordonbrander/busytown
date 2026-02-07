@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-RUNNER="$SCRIPT_DIR/agent-runner.ts"
 PID_FILE="$PROJECT_DIR/.agent-runner.pid"
 LOG_FILE="$PROJECT_DIR/.agent-runner.log"
 
@@ -54,9 +53,10 @@ logs() {
 }
 
 _loop() {
+  cd "$PROJECT_DIR"
   while true; do
     echo "[$(date)] Starting agent runner..."
-    "$RUNNER" run --agents-dir "$PROJECT_DIR/agents" --db "$PROJECT_DIR/events.db" || true
+    deno task agent-runner run --agents-dir "$PROJECT_DIR/agents" --db "$PROJECT_DIR/events.db" || true
     echo "[$(date)] Agent runner exited, restarting in 3s..."
     sleep 3
   done

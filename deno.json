@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "event-queue": "deno run --allow-read --allow-write scripts/event-queue.ts",
+    "task-board": "deno run --allow-read --allow-write scripts/task-board.ts",
+    "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}

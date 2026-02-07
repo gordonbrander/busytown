@@ -58,7 +58,7 @@ File tools (Read, Write, Edit, Glob, Grep) are restricted to the project directo
 | `"Bash(git:*)"` | Allow Bash only for commands starting with `git` |
 | `"Bash(npm test:*)"` | Allow Bash only for `npm test` commands |
 
-The runner automatically injects permission to run `event-queue.ts push` via Bash, so you never need to include that yourself.
+The runner automatically injects permission to run `deno task event-queue push` via Bash, so you never need to include that yourself.
 
 ### Common Presets
 
@@ -127,10 +127,10 @@ build.failed
 
 ### Pushing Events from an Agent
 
-The agent runner injects the `event-queue.ts push` command into each agent's system prompt. Agents can push events by running:
+The agent runner injects the `deno task event-queue push` command into each agent's system prompt. Agents can push events by running:
 
 ```bash
-scripts/event-queue.ts push --worker <agent-id> --db events.db --data '{"type":"review.completed","payload":{"files":["src/app.ts"],"issues":0}}'
+deno task event-queue push --worker <agent-id> --db events.db --data '{"type":"review.completed","payload":{"files":["src/app.ts"],"issues":0}}'
 ```
 
 Include relevant data in the `payload` so downstream agents have context.
@@ -192,7 +192,7 @@ If the claim fails, another agent already took it — move on.
 
 ### Task Board Permissions
 
-The runner automatically grants Bash permission for `task-board.ts` commands, just like it does for `event-queue.ts`. You don't need to add it to `allowed_tools`.
+The runner automatically grants Bash permission for `deno task task-board` commands, just like it does for `deno task event-queue`. You don't need to add it to `allowed_tools`.
 
 ## Tips
 

@@ -9,7 +9,7 @@ A SQLite-backed event queue for inter-worker communication. Workers can push eve
 Push an event to the queue.
 
 ```
-scripts/event-queue.ts push --worker <id> [--data <json>]
+deno task event-queue push --worker <id> [--data <json>]
 ```
 
 - Accepts `{ type, payload }` via `--data` or stdin
@@ -17,7 +17,7 @@ scripts/event-queue.ts push --worker <id> [--data <json>]
 
 **Example:**
 ```bash
-scripts/event-queue.ts push --worker agent-1 --data '{"type":"task.created","payload":{"name":"foo"}}'
+deno task event-queue push --worker agent-1 --data '{"type":"task.created","payload":{"name":"foo"}}'
 # Output: {"id":1}
 ```
 
@@ -26,7 +26,7 @@ scripts/event-queue.ts push --worker agent-1 --data '{"type":"task.created","pay
 Poll for new events and stream ndjson to stdout.
 
 ```
-scripts/event-queue.ts watch --worker <id> [--poll <seconds>] [--omit_worker <id>]
+deno task event-queue watch --worker <id> [--poll <seconds>] [--omit_worker <id>]
 ```
 
 - Streams events as ndjson (one JSON object per line)
@@ -36,7 +36,7 @@ scripts/event-queue.ts watch --worker <id> [--poll <seconds>] [--omit_worker <id
 
 **Example:**
 ```bash
-scripts/event-queue.ts watch --worker agent-1 --poll 2
+deno task event-queue watch --worker agent-1 --poll 2
 # Output (streaming):
 # {"id":1,"timestamp":1234567890,"type":"task.created","worker_id":"agent-2","payload":{"name":"foo"}}
 # {"id":2,"timestamp":1234567891,"type":"task.done","worker_id":"agent-2","payload":{}}
@@ -49,12 +49,12 @@ scripts/event-queue.ts watch --worker agent-1 --poll 2
 Get the current cursor position for a worker.
 
 ```
-scripts/event-queue.ts since --worker <id>
+deno task event-queue since --worker <id>
 ```
 
 **Example:**
 ```bash
-scripts/event-queue.ts since --worker agent-1
+deno task event-queue since --worker agent-1
 # Output: {"worker_id":"agent-1","since":5}
 ```
 
@@ -63,12 +63,12 @@ scripts/event-queue.ts since --worker agent-1
 Fetch events after a given ID. Outputs ndjson (one event per line).
 
 ```
-scripts/event-queue.ts events --since <id> [--limit <n>] [--omit_worker <id>]
+deno task event-queue events --since <id> [--limit <n>] [--omit_worker <id>]
 ```
 
 **Example:**
 ```bash
-scripts/event-queue.ts events --since 0 --limit 10
+deno task event-queue events --since 0 --limit 10
 # Output (one event per line):
 # {"id":1,"timestamp":1234567890,"type":"task.created","worker_id":"agent-1","payload":{}}
 # {"id":2,"timestamp":1234567891,"type":"task.done","worker_id":"agent-1","payload":{}}
@@ -79,12 +79,12 @@ scripts/event-queue.ts events --since 0 --limit 10
 Manually set the cursor position for a worker.
 
 ```
-scripts/event-queue.ts cursor --worker <id> --set <event_id>
+deno task event-queue cursor --worker <id> --set <event_id>
 ```
 
 **Example:**
 ```bash
-scripts/event-queue.ts cursor --worker agent-1 --set 10
+deno task event-queue cursor --worker agent-1 --set 10
 # Output: {"worker_id":"agent-1","since":10}
 ```
 
@@ -100,18 +100,18 @@ scripts/event-queue.ts cursor --worker agent-1 --set 10
 **Push an event and watch for responses:**
 ```bash
 # Terminal 1: Watch for events
-scripts/event-queue.ts watch --worker consumer --omit_worker consumer
+deno task event-queue watch --worker consumer --omit_worker consumer
 
 # Terminal 2: Push events
-scripts/event-queue.ts push --worker producer --data '{"type":"ping","payload":{"msg":"hello"}}'
+deno task event-queue push --worker producer --data '{"type":"ping","payload":{"msg":"hello"}}'
 ```
 
 **Read all events from the beginning:**
 ```bash
-scripts/event-queue.ts events --since 0
+deno task event-queue events --since 0
 ```
 
 **Reset a worker's cursor to replay events:**
 ```bash
-scripts/event-queue.ts cursor --worker agent-1 --set 0
+deno task event-queue cursor --worker agent-1 --set 0
 ```

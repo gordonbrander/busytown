@@ -9,7 +9,7 @@ A shared task board for multi-agent coordination. Agents can create tasks, claim
 Create a new task.
 
 ```
-scripts/task-board.ts add --worker <id> --title <text> [--content <text>] [--meta <json>]
+deno task task-board add --worker <id> --title <text> [--content <text>] [--meta <json>]
 ```
 
 - Returns the created task as JSON
@@ -17,7 +17,7 @@ scripts/task-board.ts add --worker <id> --title <text> [--content <text>] [--met
 
 **Example:**
 ```bash
-scripts/task-board.ts add --worker agent-1 --title "Review PR #42" --content "Check for type safety"
+deno task task-board add --worker agent-1 --title "Review PR #42" --content "Check for type safety"
 # Output: {"id":1,"title":"Review PR #42","content":"Check for type safety","status":"open",...}
 ```
 
@@ -26,7 +26,7 @@ scripts/task-board.ts add --worker agent-1 --title "Review PR #42" --content "Ch
 Claim an open task (compare-and-swap).
 
 ```
-scripts/task-board.ts claim --worker <id> --id <n>
+deno task task-board claim --worker <id> --id <n>
 ```
 
 - Sets `claimed_by` to the worker and `status` to `in_progress`
@@ -36,11 +36,11 @@ scripts/task-board.ts claim --worker <id> --id <n>
 
 **Example:**
 ```bash
-scripts/task-board.ts claim --worker agent-1 --id 1
+deno task task-board claim --worker agent-1 --id 1
 # Output: {"id":1,"status":"in_progress","claimed_by":"agent-1",...}
 
 # Another agent trying to claim the same task:
-scripts/task-board.ts claim --worker agent-2 --id 1
+deno task task-board claim --worker agent-2 --id 1
 # stderr: {"error":"claim_failed"}  (exit code 1)
 ```
 
@@ -49,7 +49,7 @@ scripts/task-board.ts claim --worker agent-2 --id 1
 Release a claimed task. Only the current holder can unclaim.
 
 ```
-scripts/task-board.ts unclaim --worker <id> --id <n>
+deno task task-board unclaim --worker <id> --id <n>
 ```
 
 - Sets `claimed_by` to null and `status` back to `open`
@@ -61,7 +61,7 @@ scripts/task-board.ts unclaim --worker <id> --id <n>
 Update a claimed task. Requires the worker to hold the claim.
 
 ```
-scripts/task-board.ts update --worker <id> --id <n> [--title <text>] [--content <text>] [--status <s>] [--meta <json>]
+deno task task-board update --worker <id> --id <n> [--title <text>] [--content <text>] [--status <s>] [--meta <json>]
 ```
 
 - Only the claim holder can update
@@ -69,7 +69,7 @@ scripts/task-board.ts update --worker <id> --id <n> [--title <text>] [--content 
 
 **Example:**
 ```bash
-scripts/task-board.ts update --worker agent-1 --id 1 --status done
+deno task task-board update --worker agent-1 --id 1 --status done
 ```
 
 ### delete
@@ -77,7 +77,7 @@ scripts/task-board.ts update --worker agent-1 --id 1 --status done
 Delete a claimed task. Requires the worker to hold the claim.
 
 ```
-scripts/task-board.ts delete --worker <id> --id <n>
+deno task task-board delete --worker <id> --id <n>
 ```
 
 - Only the claim holder can delete
@@ -90,12 +90,12 @@ scripts/task-board.ts delete --worker <id> --id <n>
 List tasks as ndjson (one JSON object per line).
 
 ```
-scripts/task-board.ts list [--status <s>] [--claimed-by <id>]
+deno task task-board list [--status <s>] [--claimed-by <id>]
 ```
 
 **Example:**
 ```bash
-scripts/task-board.ts list --status open
+deno task task-board list --status open
 # Output (one task per line):
 # {"id":1,"title":"Review PR #42","status":"open",...}
 # {"id":2,"title":"Fix tests","status":"open",...}
@@ -106,7 +106,7 @@ scripts/task-board.ts list --status open
 Get a single task by ID.
 
 ```
-scripts/task-board.ts get --id <n>
+deno task task-board get --id <n>
 ```
 
 ### summary
@@ -114,12 +114,12 @@ scripts/task-board.ts get --id <n>
 Show task counts grouped by status.
 
 ```
-scripts/task-board.ts summary
+deno task task-board summary
 ```
 
 **Example:**
 ```bash
-scripts/task-board.ts summary
+deno task task-board summary
 # Output: {"open":3,"in_progress":1,"done":5,"blocked":0,"cancelled":0}
 ```
 
