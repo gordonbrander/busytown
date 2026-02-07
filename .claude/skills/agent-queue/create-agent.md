@@ -47,6 +47,8 @@ An agent is invoked when **any** of its listen patterns match an incoming event.
 
 By default, agents can only push events. Use `allowed_tools` to grant access to additional Claude Code tools. Use `["*"]` to grant access to all tools.
 
+File tools (Read, Write, Edit, Glob, Grep) are restricted to the project directory — the working directory where the agent runner was started. Agents cannot access files outside this directory.
+
 ### Allowlist Format
 
 | Entry | Meaning |

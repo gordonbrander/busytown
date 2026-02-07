@@ -165,6 +165,7 @@ export const invokeAgent = async (
   dbPath: string,
   eventQueuePath: string,
   taskBoardPath: string,
+  projectRoot: string,
 ): Promise<{ success: boolean; output: string }> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath, eventQueuePath, taskBoardPath);
   const userMessage = formatEventsForPrompt(events);
@@ -179,6 +180,7 @@ export const invokeAgent = async (
       "text",
       ...toolArgs,
     ],
+    cwd: projectRoot,
     stdin: "piped",
     stdout: "piped",
     stderr: "piped",
@@ -229,6 +231,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
   const eventQueuePath = resolve(skillDir, "event-queue.ts");
   const taskBoardPath = resolve(skillDir, "task-board.ts");
 
+  const projectRoot = Deno.cwd();
   const db = openDb(dbPath);
   const running = new Set<string>();
   const knownAgents = new Set<string>();
@@ -267,7 +270,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
         );
 
         running.add(agent.id);
-        invokeAgent(agent, matched, dbPath, eventQueuePath, taskBoardPath)
+        invokeAgent(agent, matched, dbPath, eventQueuePath, taskBoardPath, projectRoot)
           .then(({ success, output }) => {
             console.log(formatAgentOutput(agent.id, success, output));
           })
