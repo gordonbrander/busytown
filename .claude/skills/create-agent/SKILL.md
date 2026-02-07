@@ -1,3 +1,7 @@
+---
+name: create-agent
+description: How to create agents that work with the agent-runner
+---
 # Creating Agents
 
 Agents are markdown files with YAML frontmatter that define a persona and event subscriptions. The agent runner loads these files, matches incoming events to each agent's listen patterns, and invokes matching agents as headless Claude Code instances.

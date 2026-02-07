@@ -1,3 +1,7 @@
+---
+name: event-queue
+description: How to use the worker event-queue CLI
+---
 # Event Queue CLI Reference
 
 A SQLite-backed event queue for inter-worker communication. Workers can push events and poll for new events using cursor-based pagination. Each worker maintains its own cursor position, enabling reliable at-least-once delivery.
@@ -106,7 +110,7 @@ deno task event-queue cursor --worker agent-1 --set 10
 
 ### claim
 
-Claim an event (first-claim-wins).
+Claim an event (first-claim-wins). Claiming lets workers coordinate over who should claim an event.
 
 ```
 deno task event-queue claim --worker <id> --event <id>

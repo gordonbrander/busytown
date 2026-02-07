@@ -1,5 +1,5 @@
 ---
-name: agent-queue
+name: agent-runner
 description: Multi-agent orchestration over a shared SQLite event queue.
 user_invocable: false
 ---
@@ -88,7 +88,7 @@ deno task event-queue check-claim --event 1
 
 See [Event Queue CLI](event-queue.md) for the full reference.
 
-## Supporting References
+## Supporting Skills
 
-- [Event Queue CLI](event-queue.md) — the underlying `deno task event-queue` commands (`push`, `watch`, `since`, `events`, `cursor`, `claim`, `check-claim`)
-- [Creating Agents](create-agent.md) — guide for defining new agent files
+- `event-queue` — a skill describing the underlying `deno task event-queue` commands (`push`, `watch`, `since`, `events`, `cursor`, `claim`, `check-claim`)
+- `create-agent` — a skill for helping the user define new agent files
