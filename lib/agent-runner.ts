@@ -9,7 +9,7 @@
  * @module agent-runner
  */
 
-import { extract } from "jsr:@std/front-matter@^1.0/yaml";
+import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import { openDb } from "./db.ts";
 import { type Event, pollEvents } from "./event-queue.ts";
@@ -35,7 +35,7 @@ export type RunnerConfig = {
 /** Load a single agent definition from a markdown file with YAML frontmatter. */
 export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const raw = await Deno.readTextFile(filePath);
-  const { attrs, body } = extract(raw) as {
+  const { attrs, body } = extractYaml(raw) as {
     attrs: Record<string, unknown>;
     body: string;
   };

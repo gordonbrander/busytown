@@ -5,6 +5,7 @@
     "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts"
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@1"
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/front-matter": "jsr:@std/front-matter@^1.0.9"
   }
 }
