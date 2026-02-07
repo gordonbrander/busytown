@@ -134,7 +134,7 @@ export const pushEvent = (
     timestamp,
   };
 
-  logger.info("Push event", { event });
+  logger.info("Pushed event", { event });
   return event;
 };
 
