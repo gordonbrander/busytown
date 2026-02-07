@@ -92,18 +92,6 @@ export const matchesListen = (event: Event, agent: AgentDef): boolean => {
   return false;
 };
 
-/** Format events as readable text for an agent's user message. */
-export const formatEventsForPrompt = (events: Event[]): string => {
-  return events
-    .map(
-      (e) =>
-        `[Event #${e.id}] type=${e.type} worker=${e.worker_id} time=${
-          new Date(e.timestamp * 1000).toISOString()
-        }\n${JSON.stringify(e.payload, null, 2)}`,
-    )
-    .join("\n\n");
-};
-
 /** Build the full system prompt for an agent invocation. */
 export const buildSystemPrompt = (
   agent: AgentDef,
@@ -155,7 +143,7 @@ export const invokeAgent = async (
   projectRoot: string,
 ): Promise<{ success: boolean; output: string }> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath);
-  const userMessage = formatEventsForPrompt(events);
+  const userMessage = JSON.stringify(events);
   const toolArgs = buildToolArgs(agent.allowedTools);
 
   const cmd = new Deno.Command("claude", {
@@ -183,8 +171,10 @@ export const invokeAgent = async (
   const err = new TextDecoder().decode(stderr);
 
   if (code !== 0) {
-    logger.error("agent_exit", { agent: agent.id, code });
-    if (err) logger.error("agent_stderr", { agent: agent.id, stderr: err });
+    logger.error("agent exit", { agent: agent.id, code });
+    if (err) logger.error("agent error", { agent: agent.id, stderr: err });
+  } else {
+    logger.info("agent completed", { agent: agent.id, output: out });
   }
 
   return { success: code === 0, output: out || err };
@@ -203,26 +193,18 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
 
   const projectRoot = resolve(config.agentCwd ?? Deno.cwd());
   const db = openDb(dbPath);
-  const running = new Set<string>();
-  const knownAgents = new Set<string>();
 
-  logger.info("poll_loop_start", { db: dbPath, interval_ms: config.pollIntervalMs });
+  logger.info("Poll loop start", {
+    db: dbPath,
+    interval_ms: config.pollIntervalMs,
+  });
 
   try {
     while (true) {
+      // Load agents fresh each time, so we pick up new ones
       const agents = await loadAllAgents(agentsDir, config.agentFilter);
 
-      // Log newly discovered agents
-      for (const a of agents) {
-        if (knownAgents.has(a.id)) continue;
-        logger.info("agent_loaded", { agent: a.id, listen: a.listen, tools: a.allowedTools });
-        knownAgents.add(a.id);
-      }
-
       for (const agent of agents) {
-        // Skip if this agent already has an invocation in flight
-        if (running.has(agent.id)) continue;
-
         // Poll with per-agent cursor, excluding events from self
         const allEvents = pollEvents(db, agent.id, 100, agent.id);
         const matched = filterMatchedEvents(allEvents, agent);
@@ -234,21 +216,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
           event_types: matched.map((e) => e.type),
         });
 
-        running.add(agent.id);
-        invokeAgent(agent, matched, dbPath, projectRoot)
-          .then(({ success, output }) => {
-            if (success) {
-              logger.info("agent_completed", { agent: agent.id, output });
-            } else {
-              logger.error("agent_failed", { agent: agent.id, output });
-            }
-          })
-          .catch((err) => {
-            logger.error("agent_error", { agent: agent.id, error: String(err) });
-          })
-          .finally(() => {
-            running.delete(agent.id);
-          });
+        invokeAgent(agent, matched, dbPath, projectRoot);
       }
 
       await sleep(config.pollIntervalMs);
