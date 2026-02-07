@@ -20,6 +20,7 @@ Options:
   --db <path>           Database path (default: events.db)
   --poll <seconds>      Poll interval in seconds (default: 5)
   --agent <name>        Only run a specific agent
+  --agent-cwd <path>    Working directory for sub-agents (default: src/)
   --help                Show this help`;
 
 const cli = async (): Promise<void> => {
@@ -30,6 +31,7 @@ const cli = async (): Promise<void> => {
       db: { type: "string", default: "events.db" },
       poll: { type: "string", default: "5" },
       agent: { type: "string" },
+      "agent-cwd": { type: "string", default: "src/" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
@@ -49,6 +51,7 @@ const cli = async (): Promise<void> => {
     dbPath: values.db!,
     pollIntervalMs: parseFloat(values.poll!) * 1000,
     agentFilter: values.agent,
+    agentCwd: values["agent-cwd"],
   });
 };
 

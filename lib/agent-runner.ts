@@ -29,6 +29,7 @@ export type RunnerConfig = {
   dbPath: string;
   pollIntervalMs: number;
   agentFilter?: string;
+  agentCwd?: string;
 };
 
 /** Load a single agent definition from a markdown file with YAML frontmatter. */
@@ -220,7 +221,7 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
   const agentsDir = resolve(config.agentsDir);
   const dbPath = resolve(config.dbPath);
 
-  const projectRoot = Deno.cwd();
+  const projectRoot = resolve(config.agentCwd ?? Deno.cwd());
   const db = openDb(dbPath);
   const running = new Set<string>();
   const knownAgents = new Set<string>();
