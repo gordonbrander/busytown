@@ -83,6 +83,7 @@ export const getSince = (db: DatabaseSync, workerId: string): number => {
  * @param limit - Maximum number of events to return (default: 100)
  * @param omitWorkerId - Optional worker ID to exclude from results
  * @param filterWorkerId - Optional worker ID to include exclusively
+ * @param filterType - Optional event type to filter by ("*" or undefined means all)
  * @returns Array of events ordered by ID ascending
  */
 export const getEventsSince = (
@@ -91,6 +92,7 @@ export const getEventsSince = (
   limit = 100,
   omitWorkerId?: string,
   filterWorkerId?: string,
+  filterType?: string,
 ): Event[] => {
   let sql = "SELECT * FROM events WHERE id > ?";
   const params: (number | string)[] = [sinceId];
@@ -101,6 +103,10 @@ export const getEventsSince = (
   if (filterWorkerId) {
     sql += " AND worker_id = ?";
     params.push(filterWorkerId);
+  }
+  if (filterType && filterType !== "*") {
+    sql += " AND type = ?";
+    params.push(filterType);
   }
   sql += " ORDER BY id ASC LIMIT ?";
   params.push(limit);
