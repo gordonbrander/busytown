@@ -7,6 +7,7 @@ user_invocable: true
 # Note Taking Skill
 
 ## Usage
+
 `/note <content>` - Save a note with the given content
 
 ## Instructions
@@ -16,15 +17,18 @@ When the user invokes this skill with `/note <content>`:
 1. **Parse the user's input** to extract:
    - **Tags**: Words prefixed with `#` (e.g., `#idea`, `#project`)
    - **Main content**: Everything else after removing tags
-   - **Title**: Use the first sentence of the content, or infer a concise title from the content if no clear sentence exists
+   - **Title**: Use the first sentence of the content, or infer a concise title
+     from the content if no clear sentence exists
 
 2. **Generate the filename**:
-   - Convert the title to kebab-case (lowercase, spaces become hyphens, remove special characters)
+   - Convert the title to kebab-case (lowercase, spaces become hyphens, remove
+     special characters)
    - Example: "My Great Idea" → `my-great-idea.md`
    - The file is saved in the current working directory
 
 3. **Check if file exists**:
-   - If the file already exists: Read it, preserve existing frontmatter metadata (merge tags), and update/append content as appropriate
+   - If the file already exists: Read it, preserve existing frontmatter metadata
+     (merge tags), and update/append content as appropriate
    - If the file is new: Create it fresh
 
 4. **Write the file** with YAML frontmatter in this format:
@@ -39,10 +43,10 @@ When the user invokes this skill with `/note <content>`:
    ```
 
 5. **Use the agent-queue skill to push a new event to the event queue**:
-  ```bash
-  deno task event-queue push --worker note --type note.created --payload '{"path":"..."}'
-  ```
 
+```bash
+deno task event-queue push --worker note --type note.created --payload '{"path":"..."}'
+```
 
 5. **Confirm to user**:
    - Tell them the filename that was created or updated
@@ -52,11 +56,14 @@ When the user invokes this skill with `/note <content>`:
 ## Examples
 
 **Input**: `/note This is my first idea #idea #brainstorm`
+
 - Title: "This is my first idea"
 - Tags: idea, brainstorm
 - Filename: `this-is-my-first-idea.md`
 
-**Input**: `/note #meeting Discussed the roadmap for Q2. Key decisions: launch by March.`
+**Input**:
+`/note #meeting Discussed the roadmap for Q2. Key decisions: launch by March.`
+
 - Title: "Discussed the roadmap for Q2"
 - Tags: meeting
 - Filename: `discussed-the-roadmap-for-q2.md`
@@ -64,6 +71,7 @@ When the user invokes this skill with `/note <content>`:
 ## Updating Existing Notes
 
 When a note with the same filename already exists:
+
 - Read the existing file
 - Preserve the original creation date
 - Merge any new tags with existing tags (no duplicates)

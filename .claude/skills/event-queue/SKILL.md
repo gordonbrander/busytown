@@ -2,9 +2,12 @@
 name: event-queue
 description: How to use the worker event-queue CLI
 ---
+
 # Event Queue CLI Reference
 
-A SQLite-backed event queue for inter-worker communication. Workers can push events and poll for new events using cursor-based pagination. Each worker maintains its own cursor position, enabling reliable at-least-once delivery.
+A SQLite-backed event queue for inter-worker communication. Workers can push
+events and poll for new events using cursor-based pagination. Each worker
+maintains its own cursor position, enabling reliable at-least-once delivery.
 
 ## Core Commands
 
@@ -21,6 +24,7 @@ deno task event-queue push --worker <id> --type <type> [--payload <json>]
 - Returns `{ id }` on success
 
 **Example:**
+
 ```bash
 deno task event-queue push --worker agent-1 --type task.created --payload '{"name":"foo"}'
 # Output: {"id":1}
@@ -40,6 +44,7 @@ deno task event-queue watch --worker <id> [--poll <seconds>] [--omit_worker <id>
 - Default poll interval: 3 seconds
 
 **Example:**
+
 ```bash
 deno task event-queue watch --worker agent-1 --poll 2
 # Output (streaming):
@@ -58,6 +63,7 @@ deno task event-queue since --worker <id>
 ```
 
 **Example:**
+
 ```bash
 deno task event-queue since --worker agent-1
 # Output: {"worker_id":"agent-1","since":5}
@@ -71,7 +77,8 @@ Fetch events after a given ID. Outputs ndjson (one event per line).
 deno task event-queue events [--since <id>] [--tail <n>] [--limit <n>] [--omit-worker <id>] [--worker <id>] [--type <type>]
 ```
 
-- `--since <id>` — event ID to start after (forward scan, ascending; default: `0`)
+- `--since <id>` — event ID to start after (forward scan, ascending; default:
+  `0`)
 - `--tail <n>` — show the last n events (output ascending)
 - `--limit <n>` — maximum number of events for forward scan (default: `100`)
 - `--worker <id>` — only show events from this worker
@@ -79,6 +86,7 @@ deno task event-queue events [--since <id>] [--tail <n>] [--limit <n>] [--omit-w
 - `--type <type>` — only show events of this type (`*` = all, default: `*`)
 
 **Example:**
+
 ```bash
 deno task event-queue events --since 0 --limit 10
 # Output (one event per line):
@@ -104,6 +112,7 @@ deno task event-queue cursor --worker <id> --set <event_id>
 ```
 
 **Example:**
+
 ```bash
 deno task event-queue cursor --worker agent-1 --set 10
 # Output: {"worker_id":"agent-1","since":10}
@@ -111,7 +120,8 @@ deno task event-queue cursor --worker agent-1 --set 10
 
 ### claim
 
-Claim an event (first-claim-wins). Claiming lets workers coordinate over who should claim an event.
+Claim an event (first-claim-wins). Claiming lets workers coordinate over who
+should claim an event.
 
 ```
 deno task event-queue claim --worker <id> --event <id>
@@ -121,6 +131,7 @@ deno task event-queue claim --worker <id> --event <id>
 - Returns `{"claimed":false,"claimant":"<worker_id>"}` if already claimed
 
 **Example:**
+
 ```bash
 deno task event-queue claim --worker agent-1 --event 5
 # Output: {"claimed":true}
@@ -138,6 +149,7 @@ deno task event-queue check-claim --event <id>
 ```
 
 **Example:**
+
 ```bash
 deno task event-queue check-claim --event 5
 # Output: {"event_id":5,"worker_id":"agent-1","claimed_at":1234567890}
@@ -148,14 +160,15 @@ deno task event-queue check-claim --event 99
 
 ## Global Options
 
-| Option | Description |
-|--------|-------------|
+| Option        | Description                          |
+| ------------- | ------------------------------------ |
 | `--db <path>` | Database path (default: `events.db`) |
-| `--help` | Show help message |
+| `--help`      | Show help message                    |
 
 ## Examples
 
 **Push an event and watch for responses:**
+
 ```bash
 # Terminal 1: Watch for events
 deno task event-queue watch --worker consumer --omit_worker consumer
@@ -165,11 +178,13 @@ deno task event-queue push --worker producer --type ping --payload '{"msg":"hell
 ```
 
 **Read all events from the beginning:**
+
 ```bash
 deno task event-queue events --since 0
 ```
 
 **Reset a worker's cursor to replay events:**
+
 ```bash
 deno task event-queue cursor --worker agent-1 --set 0
 ```
