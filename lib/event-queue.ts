@@ -9,7 +9,7 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { openDb } from "./db.ts";
+import { openDb, transaction } from "./db.ts";
 import { sleep } from "./utils.ts";
 
 export { openDb, sleep };
@@ -176,4 +176,54 @@ export const updateCursor = (
     "INSERT INTO worker_cursors (worker_id, since, timestamp) VALUES (?, ?, unixepoch()) ON CONFLICT(worker_id) DO UPDATE SET since = excluded.since, timestamp = excluded.timestamp",
   );
   stmt.run(workerId, sinceId);
+};
+
+/**
+ * Claims an event for a worker (first-claim-wins).
+ *
+ * Uses INSERT OR IGNORE with the PRIMARY KEY constraint to ensure only the
+ * first worker to claim an event succeeds. Emits a `claim.created` event on success.
+ *
+ * @param db - Database connection
+ * @param workerId - Worker ID attempting the claim
+ * @param eventId - Event ID to claim
+ * @returns true if the claim succeeded, false if already claimed
+ */
+export const claimEvent = (
+  db: DatabaseSync,
+  workerId: string,
+  eventId: number,
+): boolean => {
+  return transaction(db, () => {
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO claims (event_id, worker_id) VALUES (?, ?)",
+    );
+    insert.run(eventId, workerId);
+    const check = db.prepare("SELECT worker_id FROM claims WHERE event_id = ?");
+    const row = check.get(eventId) as { worker_id: string } | undefined;
+    if (row && row.worker_id === workerId) {
+      pushEvent(db, workerId, "claim.created", { event_id: eventId });
+      return true;
+    }
+    return false;
+  });
+};
+
+/**
+ * Gets the claimant for an event.
+ *
+ * @param db - Database connection
+ * @param eventId - Event ID to check
+ * @returns The claim details or undefined if unclaimed
+ */
+export const getClaimant = (
+  db: DatabaseSync,
+  eventId: number,
+): { worker_id: string; claimed_at: number } | undefined => {
+  const stmt = db.prepare(
+    "SELECT worker_id, claimed_at FROM claims WHERE event_id = ?",
+  );
+  return stmt.get(eventId) as
+    | { worker_id: string; claimed_at: number }
+    | undefined;
 };

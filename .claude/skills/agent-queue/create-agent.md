@@ -159,40 +159,36 @@ When triggered by file changes, review the modified TypeScript files for:
 Provide a brief summary of findings. If no issues found, confirm the code looks good.
 ```
 
-## Using the Task Board
+## Claiming Events
 
-Agents can coordinate work through a shared task board. The agent runner automatically injects task board CLI instructions into each agent's system prompt.
+Agents can claim events to coordinate work. The agent runner automatically injects claim CLI instructions into each agent's system prompt. Claims are first-claim-wins — only one worker can claim each event.
 
 ### Workflow
 
-1. **Create tasks** — break work into discrete units with `task-board add`
-2. **Claim before working** — use `task-board claim` to atomically take ownership
-3. **Handle claim failures** — if a claim fails (exit code 1), the task is already taken; try another
-4. **Update status** — mark tasks `done`, `blocked`, etc. with `task-board update`
-5. **Listen for task events** — subscribe to `task.*` to react to board changes
+1. **Claim events** — use `event-queue claim` to atomically take ownership of an event
+2. **Handle claim failures** — if the claim response shows `claimed:false`, another worker already claimed it; move on
+3. **Listen for claim events** — subscribe to `claim.created` to react to new claims
 
-### Example Agent Using the Task Board
+### Example Agent Using Claims
 
 ```markdown
 ---
-description: Picks up open review tasks and reviews the code
+description: Picks up work requests and reviews the code
 listen:
-  - "task.created"
+  - "work.requested"
 allowed_tools:
   - "Read"
   - "Grep"
   - "Glob"
 ---
 
-When a new task is created, check if it's a code review task.
-If so, claim it, perform the review, then mark it done.
-
-If the claim fails, another agent already took it — move on.
+When a work request event arrives, claim it before starting work.
+If the claim response shows claimed:false, another agent already took it — move on.
 ```
 
-### Task Board Permissions
+### Claim Permissions
 
-The runner automatically grants Bash permission for `deno task task-board` commands, just like it does for `deno task event-queue`. You don't need to add it to `allowed_tools`.
+The runner automatically grants Bash permission for `deno task event-queue` commands, including `claim` and `check-claim`. You don't need to add them to `allowed_tools`.
 
 ## Tips
 

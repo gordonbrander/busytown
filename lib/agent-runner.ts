@@ -119,22 +119,15 @@ To push events to the queue, run:
 
 where <json> is a JSON object with "type" and optional "payload" fields.
 
-## Task board
+## Claiming events
 
-A shared task board is available for coordinating work with other agents.
+To claim an event (first-claim-wins):
+  deno task event-queue claim --worker ${agent.id} --db ${dbPath} --event <id>
 
-Commands:
-  deno task task-board list --db ${dbPath} [--status <s>] [--claimed-by <id>]
-  deno task task-board add --worker ${agent.id} --db ${dbPath} --title <text> [--content <text>] [--meta <json>]
-  deno task task-board get --id <n> --db ${dbPath}
-  deno task task-board claim --worker ${agent.id} --id <n> --db ${dbPath}
-  deno task task-board unclaim --worker ${agent.id} --id <n> --db ${dbPath}
-  deno task task-board update --worker ${agent.id} --id <n> --db ${dbPath} [--title/--content/--status <val>] [--meta <json>]
-  deno task task-board delete --worker ${agent.id} --id <n> --db ${dbPath}
-  deno task task-board summary --db ${dbPath}
+To check who claimed an event:
+  deno task event-queue check-claim --db ${dbPath} --event <id>
 
-Claim a task before working on it. Only the claim holder can update or delete a task.
-If a claim fails (exit code 1), the task is already taken — try another task.
+Claim an event before working on it. If the claim response shows claimed:false, another worker already claimed it — move on.
 
 ---
 
@@ -142,7 +135,7 @@ If a claim fails (exit code 1), the task is already taken — try another task.
   return header + agent.systemPrompt;
 };
 
-/** Build --allowedTools CLI args. Auto-injects event-queue and task-board Bash permissions. */
+/** Build --allowedTools CLI args. Auto-injects event-queue Bash permissions. */
 export const buildToolArgs = (
   allowedTools: string[],
 ): string[] => {
@@ -151,7 +144,6 @@ export const buildToolArgs = (
   const tools = [
     ...allowedTools,
     "Bash(deno task event-queue:*)",
-    "Bash(deno task task-board:*)",
   ];
   return ["--allowedTools", tools.join(" ")];
 };

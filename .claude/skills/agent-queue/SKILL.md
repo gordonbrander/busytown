@@ -74,31 +74,21 @@ Agents run concurrently but each agent processes one batch at a time (no duplica
   Your system prompt here...
   ```
 
-## Task Board
+## Claiming Events
 
-Agents can coordinate work through a shared task board. Tasks can be created, claimed (compare-and-swap), updated, and deleted. All mutations emit events to the event queue.
+Agents can claim events to coordinate work. Claims are first-claim-wins — only one worker can claim each event.
 
 ```bash
-# Add a task
-deno task task-board add --worker user --title "Review PR #42"
+# Claim event #1
+deno task event-queue claim --worker agent-1 --event 1
 
-# List open tasks
-deno task task-board list --status open
-
-# Claim a task (atomic — only one agent wins)
-deno task task-board claim --worker agent-1 --id 1
-
-# Mark done (only claim holder can update)
-deno task task-board update --worker agent-1 --id 1 --status done
-
-# View summary
-deno task task-board summary
+# Check who claimed an event
+deno task event-queue check-claim --event 1
 ```
 
-See [Task Board CLI](task-board.md) for the full reference.
+See [Event Queue CLI](event-queue.md) for the full reference.
 
 ## Supporting References
 
-- [Event Queue CLI](event-queue.md) — the underlying `deno task event-queue` commands (`push`, `watch`, `since`, `events`, `cursor`)
-- [Task Board CLI](task-board.md) — shared task board for multi-agent work coordination
+- [Event Queue CLI](event-queue.md) — the underlying `deno task event-queue` commands (`push`, `watch`, `since`, `events`, `cursor`, `claim`, `check-claim`)
 - [Creating Agents](create-agent.md) — guide for defining new agent files

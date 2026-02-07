@@ -6,6 +6,8 @@
 
 import { Command } from "@cliffy/command";
 import {
+  claimEvent,
+  getClaimant,
   getEventsSince,
   getSince,
   openDb,
@@ -127,6 +129,44 @@ await new Command()
         const sinceId = parseInt(options.set, 10);
         updateCursor(db, options.worker, sinceId);
         console.log(JSON.stringify({ worker_id: options.worker, since: sinceId }));
+      } finally {
+        db.close();
+      }
+    })
+
+  .command("claim")
+    .description("Claim an event (first-claim-wins).")
+    .option("--worker <id:string>", "Worker ID", { required: true })
+    .option("--event <id:string>", "Event ID to claim", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const eventId = parseInt(options.event, 10);
+        const claimed = claimEvent(db, options.worker, eventId);
+        if (claimed) {
+          console.log(JSON.stringify({ claimed: true }));
+        } else {
+          const existing = getClaimant(db, eventId);
+          console.log(JSON.stringify({ claimed: false, claimant: existing?.worker_id }));
+        }
+      } finally {
+        db.close();
+      }
+    })
+
+  .command("check-claim")
+    .description("Check the claim status of an event.")
+    .option("--event <id:string>", "Event ID to check", { required: true })
+    .action((options) => {
+      const db = openDb(options.db);
+      try {
+        const eventId = parseInt(options.event, 10);
+        const claim = getClaimant(db, eventId);
+        if (claim) {
+          console.log(JSON.stringify({ event_id: eventId, worker_id: claim.worker_id, claimed_at: claim.claimed_at }));
+        } else {
+          console.log(JSON.stringify({ event_id: eventId, claimed: false }));
+        }
       } finally {
         db.close();
       }

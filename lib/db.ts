@@ -2,7 +2,7 @@
  * Shared database initialization for the agent queue system.
  *
  * Opens a SQLite database with WAL mode and initializes all schemas
- * (events, worker_cursors, tasks) in a single call.
+ * (events, worker_cursors, claims) in a single call.
  *
  * @module db
  */
@@ -13,7 +13,7 @@ import { DatabaseSync } from "node:sqlite";
  * Opens a SQLite database and initializes all schemas.
  *
  * Enables WAL mode, busy timeout, and foreign keys, then creates the
- * `events`, `worker_cursors`, and `tasks` tables if they don't exist.
+ * `events`, `worker_cursors`, and `claims` tables if they don't exist.
  *
  * @param path - Path to the SQLite database file
  * @returns The opened database connection
@@ -43,25 +43,14 @@ export const openDb = (path: string): DatabaseSync => {
     )
   `);
 
-  // Tasks schema
+  // Claims schema
   db.exec(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'open'
-        CHECK (status IN ('open', 'in_progress', 'done', 'blocked', 'cancelled')),
-      meta TEXT NOT NULL DEFAULT '{}',
-      claimed_by TEXT,
-      created_by TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    CREATE TABLE IF NOT EXISTS claims (
+      event_id INTEGER PRIMARY KEY,
+      worker_id TEXT NOT NULL,
+      claimed_at INTEGER NOT NULL DEFAULT (unixepoch())
     )
   `);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)");
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_tasks_claimed_by ON tasks(claimed_by)",
-  );
 
   return db;
 };

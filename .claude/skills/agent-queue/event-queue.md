@@ -104,6 +104,43 @@ deno task event-queue cursor --worker agent-1 --set 10
 # Output: {"worker_id":"agent-1","since":10}
 ```
 
+### claim
+
+Claim an event (first-claim-wins).
+
+```
+deno task event-queue claim --worker <id> --event <id>
+```
+
+- Returns `{"claimed":true}` on success
+- Returns `{"claimed":false,"claimant":"<worker_id>"}` if already claimed
+
+**Example:**
+```bash
+deno task event-queue claim --worker agent-1 --event 5
+# Output: {"claimed":true}
+
+deno task event-queue claim --worker agent-2 --event 5
+# Output: {"claimed":false,"claimant":"agent-1"}
+```
+
+### check-claim
+
+Check the claim status of an event.
+
+```
+deno task event-queue check-claim --event <id>
+```
+
+**Example:**
+```bash
+deno task event-queue check-claim --event 5
+# Output: {"event_id":5,"worker_id":"agent-1","claimed_at":1234567890}
+
+deno task event-queue check-claim --event 99
+# Output: {"event_id":99,"claimed":false}
+```
+
 ## Global Options
 
 | Option | Description |
