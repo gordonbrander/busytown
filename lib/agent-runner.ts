@@ -135,6 +135,9 @@ export const buildToolArgs = (
   return ["--allowedTools", tools.join(" ")];
 };
 
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
 /** Invoke an agent as a headless Claude Code instance. */
 export const invokeAgent = async (
   agent: AgentDef,
@@ -163,12 +166,12 @@ export const invokeAgent = async (
 
   const process = cmd.spawn();
   const writer = process.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(userMessage));
+  await writer.write(textEncoder.encode(userMessage));
   await writer.close();
 
   const { code, stdout, stderr } = await process.output();
-  const out = new TextDecoder().decode(stdout);
-  const err = new TextDecoder().decode(stderr);
+  const out = textDecoder.decode(stdout);
+  const err = textDecoder.decode(stderr);
 
   if (code !== 0) {
     logger.error("agent exit", { agent: agent.id, code });
