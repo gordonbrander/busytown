@@ -6,7 +6,7 @@
  * event types they listen for. Multiple agents collaborate asynchronously via
  * the shared SQLite event queue.
  *
- * @module agent-runner
+ * @module runner
  */
 
 import { extractYaml } from "@std/front-matter";
@@ -27,7 +27,7 @@ import mainLogger from "./main-logger.ts";
 import { sleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
 
-const logger = mainLogger.child({ component: "agent-runner" });
+const logger = mainLogger.child({ component: "runner" });
 
 const POLL_BATCH_SIZE = 100;
 
@@ -100,17 +100,17 @@ export const buildSystemPrompt = (
 ## Pushing events
 
 To push events to the queue, run:
-  deno task event-queue push --worker ${agent.id} --db ${dbPath} --type <type> --payload '<json>'
+  deno task events push --worker ${agent.id} --db ${dbPath} --type <type> --payload '<json>'
 
 where <type> is the event type and <json> is an optional JSON payload (defaults to {}).
 
 ## Claiming events
 
 To claim an event (first-claim-wins):
-  deno task event-queue claim --worker ${agent.id} --db ${dbPath} --event <id>
+  deno task events claim --worker ${agent.id} --db ${dbPath} --event <id>
 
 To check who claimed an event:
-  deno task event-queue check-claim --db ${dbPath} --event <id>
+  deno task events check-claim --db ${dbPath} --event <id>
 
 Claim an event before working on it. If the claim response shows claimed:false, another worker already claimed it — move on.
 
@@ -120,7 +120,7 @@ Claim an event before working on it. If the claim response shows claimed:false, 
   return header + agent.systemPrompt;
 };
 
-/** Build --allowedTools CLI args. Auto-injects event-queue Bash permissions. */
+/** Build --allowedTools CLI args. Auto-injects events Bash permissions. */
 export const buildToolArgs = (
   allowedTools: string[],
 ): string[] => {
@@ -128,7 +128,7 @@ export const buildToolArgs = (
   if (allowedTools.includes("*")) return [];
   const tools = [
     ...allowedTools,
-    "Bash(deno task event-queue:*)",
+    "Bash(deno task events:*)",
   ];
   return ["--allowedTools", tools.join(" ")];
 };

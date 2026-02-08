@@ -64,10 +64,10 @@ plans, WIP, etc.
 
 ```bash
 # Run in foreground
-deno task agent-runner run
+deno task runner run
 
 # Or start as a background daemon
-deno task agent-runner start
+deno task runner start
 ```
 
 ### 2. Push an event
@@ -115,7 +115,7 @@ summary to `summaries/<filename>.md`.
 
 After writing the summary, push an event:
 
-    deno task event-queue push --type summary.created --worker summarizer \
+    deno task events push --type summary.created --worker summarizer \
       --payload '{"path": "summaries/<filename>.md"}'
 ```
 
@@ -139,28 +139,28 @@ The event queue has a full CLI for manual interaction and scripting:
 
 ```bash
 # Push an event
-deno task event-queue push --type my.event --worker my-script --payload '{"key":"value"}'
+deno task events push --type my.event --worker my-script --payload '{"key":"value"}'
 
 # Query events
-deno task event-queue events --type plan.* --limit 10 --tail
+deno task events list --type plan.* --limit 10 --tail
 
 # Watch for new events (streams ndjson)
-deno task event-queue watch --worker my-watcher --type file.*
+deno task events watch --worker my-watcher --type file.*
 
 # Check a worker's cursor position
-deno task event-queue since --worker my-agent
+deno task events since --worker my-agent
 
 # Claim an event
-deno task event-queue claim --event-id 42 --worker my-agent
+deno task events claim --event-id 42 --worker my-agent
 
 # Check who claimed an event
-deno task event-queue check-claim --event-id 42
+deno task events check-claim --event-id 42
 ```
 
 ## Agent runner CLI
 
 ```bash
-deno task agent-runner <command> [options]
+deno task runner <command> [options]
 
 # Commands
 run                    # Run poll loop in foreground
@@ -187,10 +187,10 @@ watches the current directory (`.`).
 
 ```bash
 # Watch specific directories
-deno task agent-runner run --watch src --watch docs
+deno task runner run --watch src --watch docs
 
 # Exclude patterns (glob syntax)
-deno task agent-runner run --exclude '**/dist/**' --exclude '**/build/**'
+deno task runner run --exclude '**/dist/**' --exclude '**/build/**'
 ```
 
 Common paths (`.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,

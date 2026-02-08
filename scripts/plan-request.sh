@@ -4,4 +4,4 @@
 set -euo pipefail
 
 prd_path="${1:?Usage: deno task plan-request <prd-file>}"
-deno task event-queue push --worker user --type plan.request --payload "{\"prd_path\":\"$prd_path\"}"
+deno task events push --worker user --type plan.request --payload "{\"prd_path\":\"$prd_path\"}"

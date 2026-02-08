@@ -72,7 +72,7 @@ cannot access files outside this directory.
 | `"Bash(git:*)"`      | Allow Bash only for commands starting with `git` |
 | `"Bash(npm test:*)"` | Allow Bash only for `npm test` commands          |
 
-The runner automatically injects permission to run `deno task event-queue push`
+The runner automatically injects permission to run `deno task events push`
 via Bash, so you never need to include that yourself.
 
 ### Common Presets
@@ -148,11 +148,11 @@ build.failed
 
 ### Pushing Events from an Agent
 
-The agent runner injects the `deno task event-queue push` command into each
+The agent runner injects the `deno task events push` command into each
 agent's system prompt. Agents can push events by running:
 
 ```bash
-deno task event-queue push --worker <agent-id> --db events.db --type review.completed --payload '{"files":["src/app.ts"],"issues":0}'
+deno task events push --worker <agent-id> --db events.db --type review.completed --payload '{"files":["src/app.ts"],"issues":0}'
 ```
 
 Include relevant data in the `payload` so downstream agents have context.
@@ -216,7 +216,7 @@ response shows claimed:false, another agent already took it — move on.
 
 ### Claim Permissions
 
-The runner automatically grants Bash permission for `deno task event-queue`
+The runner automatically grants Bash permission for `deno task events`
 commands, including `claim` and `check-claim`. You don't need to add them to
 `allowed_tools`.
 
