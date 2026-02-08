@@ -260,6 +260,8 @@ Deno.test("getEventsSince - events are ordered by id ascending", () => {
 
 Deno.test("pollEvents - returns new events and advances cursor", () => {
   const db = freshDb();
+  // Pre-set cursor so the worker sees events pushed after it
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
@@ -271,6 +273,7 @@ Deno.test("pollEvents - returns new events and advances cursor", () => {
 
 Deno.test("pollEvents - second poll returns only new events", () => {
   const db = freshDb();
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
@@ -295,6 +298,7 @@ Deno.test("pollEvents - returns empty array and does not advance cursor when no 
 
 Deno.test("pollEvents - omitWorkerId excludes self-events", () => {
   const db = freshDb();
+  updateCursor(db, "w1", 0);
   pushEvent(db, "w1", "own-event");
   pushEvent(db, "w2", "other-event");
 
@@ -306,6 +310,7 @@ Deno.test("pollEvents - omitWorkerId excludes self-events", () => {
 
 Deno.test("pollEvents - respects limit", () => {
   const db = freshDb();
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
   pushEvent(db, "w1", "c");

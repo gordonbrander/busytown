@@ -207,7 +207,7 @@ export const pollEvents = (
   limit = 100,
   omitWorkerId?: string,
 ): Event[] => {
-  const since = getSince(db, workerId);
+  const since = getOrCreateCursor(db, workerId);
   const events = getEventsSince(db, { sinceId: since, limit, omitWorkerId });
   if (events.length > 0) {
     updateCursor(db, workerId, events[events.length - 1].id);
