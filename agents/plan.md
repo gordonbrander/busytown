@@ -8,6 +8,7 @@ allowed_tools:
   - "Grep"
   - "Glob"
   - "Write"
+  - "Skill"
 ---
 
 # Plan Agent

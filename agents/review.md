@@ -6,6 +6,7 @@ allowed_tools:
   - "Read"
   - "Grep"
   - "Glob"
+  - "Skill"
   - "Bash(git:*)"
   - "Write"
 ---
