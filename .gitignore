@@ -1,5 +1,6 @@
 .DS_Store
 node_modules/
+scratch/
 *.log
 *.pid
 events.db*
