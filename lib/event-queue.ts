@@ -12,9 +12,9 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { Logger } from "./logger.ts";
+import mainLogger from "./main-logger.ts";
 
-const logger = new Logger({ component: "event-queue" });
+const logger = mainLogger.child({ component: "event-queue" });
 
 /**
  * Opens a SQLite database and initializes all schemas.

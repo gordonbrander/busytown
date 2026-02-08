@@ -6,14 +6,14 @@
 
 import { Command } from "@cliffy/command";
 import { runPollLoop } from "../lib/agent-runner.ts";
-import { Logger } from "../lib/logger.ts";
+import mainLogger from "../lib/main-logger.ts";
 
-const logger = new Logger({ component: "daemon" });
+const logger = mainLogger.child({ component: "daemon" });
 
 // --- Constants ---
 
 const PID_FILE = ".agent-runner.pid";
-const LOG_FILE = ".agent-runner.log";
+const LOG_FILE = "logs/daemon-stderr.log";
 
 // --- Utility functions ---
 
@@ -99,17 +99,33 @@ function serializeRunnerArgs(options: RunnerOptions): string[] {
   if (options.poll) args.push("--poll", options.poll);
   if (options.agent) args.push("--agent", options.agent);
   if (options.agentCwd) args.push("--agent-cwd", options.agentCwd);
+  if (options.watch) args.push("--watch", options.watch);
+  if (options.watchIgnore) args.push("--watch-ignore", options.watchIgnore);
+  if (options.watchDebounce) {
+    args.push("--watch-debounce", options.watchDebounce);
+  }
   return args;
 }
 
 /** Execute the poll loop with the given CLI options. */
-async function execRunPollLoop(options: RunnerOptions): Promise<void> {
+async function execRunPollLoop(
+  options: RunnerOptions,
+): Promise<void> {
   await runPollLoop({
     agentsDir: options.agentsDir,
     dbPath: options.db,
     pollIntervalMs: parseFloat(options.poll) * 1000,
     agentFilter: options.agent,
     agentCwd: options.agentCwd,
+    watchPaths: options.watch
+      ? options.watch.split(",").map((s: string) => s.trim())
+      : undefined,
+    watchIgnore: options.watchIgnore
+      ? options.watchIgnore.split(",").map((s: string) => s.trim())
+      : undefined,
+    watchDebounceMs: options.watchDebounce
+      ? parseInt(options.watchDebounce, 10)
+      : undefined,
   });
 }
 
@@ -118,7 +134,7 @@ async function execRunPollLoop(options: RunnerOptions): Promise<void> {
 async function startDaemon(options: RunnerOptions): Promise<void> {
   const existing = await getRunningPid();
   if (existing !== null) {
-    logger.error("already_running", { pid: existing });
+    logger.error("Daemon already running", { pid: existing });
     Deno.exit(1);
   }
 
@@ -135,7 +151,7 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
   const allArgs = [...denoArgs, ...runnerArgs];
   const shellCmd = "exec deno " + allArgs.map(shellEscape).join(" ");
 
-  logger.info("daemon_starting");
+  logger.info("Daemon starting...");
   const child = new Deno.Command("sh", {
     args: ["-c", shellCmd + " >> " + shellEscape(LOG_FILE) + " 2>&1"],
     stdin: "null",
@@ -145,21 +161,21 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
   child.unref();
 
   await writePid(child.pid);
-  logger.info("daemon_started", { pid: child.pid, log_file: LOG_FILE });
+  logger.info("Daemon started", { pid: child.pid, log_file: LOG_FILE });
 }
 
 async function stopDaemon(): Promise<void> {
   const pid = await getRunningPid();
   if (pid === null) {
-    logger.info("daemon_not_running");
+    logger.info("Daemon not running");
     await removePid();
     return;
   }
 
-  logger.info("daemon_stopping", { pid });
+  logger.info("Daemon stopping...", { pid });
   await killProcessTree(pid);
   await removePid();
-  logger.info("daemon_stopped");
+  logger.info("Daemon stopped");
 }
 
 // --- Command definitions ---
@@ -179,6 +195,17 @@ const runCmd = new Command()
   .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
     default: ".",
   })
+  .option(
+    "--watch <paths:string>",
+    "Comma-separated paths to watch for FS changes",
+  )
+  .option(
+    "--watch-ignore <patterns:string>",
+    "Comma-separated additional ignore patterns",
+  )
+  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
+    default: "200",
+  })
   .action(async (options) => {
     await execRunPollLoop(options);
   });
@@ -197,6 +224,17 @@ const startCmd = new Command()
   .option("--agent <name:string>", "Only run a specific agent")
   .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
     default: ".",
+  })
+  .option(
+    "--watch <paths:string>",
+    "Comma-separated paths to watch for FS changes",
+  )
+  .option(
+    "--watch-ignore <patterns:string>",
+    "Comma-separated additional ignore patterns",
+  )
+  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
+    default: "200",
   })
   .action(async (options) => {
     await startDaemon(options);
@@ -223,6 +261,17 @@ const restartCmd = new Command()
   .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
     default: ".",
   })
+  .option(
+    "--watch <paths:string>",
+    "Comma-separated paths to watch for FS changes",
+  )
+  .option(
+    "--watch-ignore <patterns:string>",
+    "Comma-separated additional ignore patterns",
+  )
+  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
+    default: "200",
+  })
   .action(async (options) => {
     await stopDaemon();
     // Brief pause to let process fully exit
@@ -235,9 +284,9 @@ const statusCmd = new Command()
   .action(async () => {
     const pid = await getRunningPid();
     if (pid !== null) {
-      logger.info("daemon_status", { pid, running: true });
+      logger.info("Daemon status", { pid, running: true });
     } else {
-      logger.info("daemon_status", { running: false });
+      logger.info("Daemon status", { running: false });
     }
   });
 
@@ -257,16 +306,27 @@ const daemonCmd = new Command()
   .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
     default: ".",
   })
+  .option(
+    "--watch <paths:string>",
+    "Comma-separated paths to watch for FS changes",
+  )
+  .option(
+    "--watch-ignore <patterns:string>",
+    "Comma-separated additional ignore patterns",
+  )
+  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
+    default: "200",
+  })
   .action(async (options) => {
-    // Auto-restart loop, same as daemon.sh's _loop
+    // Auto-restart loop
     while (true) {
-      logger.info("runner_start");
+      logger.info("Daemon starting");
       try {
         await execRunPollLoop(options);
       } catch (err) {
-        logger.error("runner_error", { error: String(err) });
+        logger.error("Daemon error", { error: String(err) });
       }
-      logger.info("runner_restarting");
+      logger.info("Daemon restarting...");
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   });

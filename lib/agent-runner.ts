@@ -12,10 +12,11 @@
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import { type Event, openDb, pollEvents } from "./event-queue.ts";
-import { Logger } from "./logger.ts";
+import { runFsWatcher } from "./fs-watcher.ts";
+import mainLogger from "./main-logger.ts";
 import { sleep } from "./utils.ts";
 
-const logger = new Logger({ component: "agent-runner" });
+const logger = mainLogger.child({ component: "agent-runner" });
 
 export type AgentDef = {
   id: string;
@@ -32,6 +33,9 @@ export type RunnerConfig = {
   pollIntervalMs: number;
   agentFilter?: string;
   agentCwd?: string;
+  watchPaths?: string[];
+  watchIgnore?: string[];
+  watchDebounceMs?: number;
 };
 
 /** Load a single agent definition from a markdown file with YAML frontmatter. */
@@ -198,34 +202,49 @@ export const runPollLoop = async (config: RunnerConfig): Promise<void> => {
     interval_ms: config.pollIntervalMs,
   });
 
-  try {
-    while (true) {
-      // Load agents fresh each time, so we pick up new ones
-      const agents = await loadAllAgents(agentsDir, config.agentFilter);
-      logger.info("Poll", {
-        db: dbPath,
-        interval_ms: config.pollIntervalMs,
-        agents: agents.map((agent) => agent.id),
-      });
-
-      for (const agent of agents) {
-        // Poll with per-agent cursor, excluding events from self
-        const allEvents = pollEvents(db, agent.id, 100, agent.id);
-        const matched = filterMatchedEvents(allEvents, agent);
-        if (matched.length === 0) continue;
-
-        logger.info("dispatch", {
-          agent: agent.id,
-          count: matched.length,
-          event_types: matched.map((e) => e.type),
+  const pollPromise = (async () => {
+    try {
+      while (true) {
+        // Load agents fresh each time, so we pick up new ones
+        const agents = await loadAllAgents(agentsDir, config.agentFilter);
+        logger.info("Poll", {
+          db: dbPath,
+          interval_ms: config.pollIntervalMs,
+          agents: agents.map((agent) => agent.id),
         });
 
-        runAgent(agent, matched, dbPath, projectRoot);
-      }
+        for (const agent of agents) {
+          // Poll with per-agent cursor, excluding events from self
+          const allEvents = pollEvents(db, agent.id, 100, agent.id);
+          const matched = filterMatchedEvents(allEvents, agent);
+          if (matched.length === 0) continue;
 
-      await sleep(config.pollIntervalMs);
+          logger.info("dispatch", {
+            agent: agent.id,
+            count: matched.length,
+            event_types: matched.map((e) => e.type),
+          });
+
+          runAgent(agent, matched, dbPath, projectRoot);
+        }
+
+        await sleep(config.pollIntervalMs);
+      }
+    } finally {
+      db.close();
     }
-  } finally {
-    db.close();
+  })();
+
+  if (config.watchPaths && config.watchPaths.length > 0) {
+    const watcherPromise = runFsWatcher({
+      watchPaths: config.watchPaths,
+      ignorePatterns: config.watchIgnore ?? [],
+      debounceMs: config.watchDebounceMs ?? 200,
+      dbPath,
+      projectRoot,
+    });
+    await Promise.all([pollPromise, watcherPromise]);
+  } else {
+    await pollPromise;
   }
 };

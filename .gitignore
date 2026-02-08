@@ -2,3 +2,5 @@
 node_modules/
 .agent-runner.pid
 .agent-runner.log
+logs/
+events.db*

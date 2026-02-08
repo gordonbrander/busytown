@@ -1,3 +1,5 @@
+import { dirname } from "node:path";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type LogContext = Record<string, unknown>;
@@ -52,13 +54,61 @@ export const consolePrettyDriver = (): LogDriver => ({
   error: (entry) => console.error(entry.msg, entry),
 });
 
+const textEncoder = new TextEncoder();
+
+/** A log driver that writes NDJSON to a file */
+export const fileJsonDriver = (filePath: string): LogDriver => {
+  const dir = dirname(filePath);
+  Deno.mkdirSync(dir, { recursive: true });
+  const file = Deno.openSync(filePath, {
+    write: true,
+    create: true,
+    append: true,
+  });
+  const write = (entry: LogEntry) => {
+    file.writeSync(textEncoder.encode(JSON.stringify(entry) + "\n"));
+  };
+  return {
+    debug: write,
+    info: write,
+    warn: write,
+    error: write,
+  };
+};
+
+/** A log driver that fans out each log call to multiple drivers */
+export const multiDriver = (...drivers: LogDriver[]): LogDriver => ({
+  debug: (entry) => {
+    for (const d of drivers) {
+      d.debug(entry);
+    }
+  },
+  info: (entry) => {
+    for (const d of drivers) {
+      d.info(entry);
+    }
+  },
+  warn: (entry) => {
+    for (const d of drivers) {
+      d.warn(entry);
+    }
+  },
+  error: (entry) => {
+    for (const d of drivers) {
+      d.error(entry);
+    }
+  },
+});
+
 const prepareLogObject = (
   context: Record<string, unknown>,
   data: Record<string, unknown>,
+  level: LogLevel,
   msg: string,
 ): LogEntry => ({
   ...context,
   ...data,
+  level,
   time: Date.now(),
   msg,
 });
@@ -89,28 +139,28 @@ export class Logger {
   /** Log a debug message */
   debug(msg: string, data: LogContext = {}): void {
     if (this.#shouldLog("debug")) {
-      this.driver.debug(prepareLogObject(this.context, data, msg));
+      this.driver.debug(prepareLogObject(this.context, data, "debug", msg));
     }
   }
 
   /** Log an info message */
   info(msg: string, data: LogContext = {}): void {
     if (this.#shouldLog("info")) {
-      this.driver.info(prepareLogObject(this.context, data, msg));
+      this.driver.info(prepareLogObject(this.context, data, "info", msg));
     }
   }
 
   /** Log a warning message */
   warn(msg: string, data: LogContext = {}): void {
     if (this.#shouldLog("warn")) {
-      this.driver.warn(prepareLogObject(this.context, data, msg));
+      this.driver.warn(prepareLogObject(this.context, data, "warn", msg));
     }
   }
 
   /** Log an error message */
   error(msg: string, data: LogContext = {}): void {
     if (this.#shouldLog("error")) {
-      this.driver.error(prepareLogObject(this.context, data, msg));
+      this.driver.error(prepareLogObject(this.context, data, "error", msg));
     }
   }
 }

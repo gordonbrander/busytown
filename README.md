@@ -2,10 +2,10 @@
 
 _A town full of busy little guys who do things._
 
-**busytown** is a multi-agent coordination framework built around a shared SQLite event queue.
-Each agent is a separate Claude Code instance. Agents listen for events, react
-to them, and push new events, forming an asynchronous pipeline where no agent
-needs to know about any other agent, only about the events.
+**busytown** is a multi-agent coordination framework built around a shared
+SQLite event queue. Each agent is a separate Claude Code instance. Agents listen
+for events, react to them, and push new events, forming an asynchronous pipeline
+where no agent needs to know about any other agent, only about the events.
 
 <p><img src="./busytown.png" src="A town full of busy little guys who do things" /></p>
 
@@ -33,8 +33,8 @@ agent:
 - **Pushes** new events to notify other agents of what it did
 - **Claims** events when needed, so only one agent acts on a given event
 
-Agents can also use the filesystem as a shared workspace for saving memories, plans, WIP,
-etc.
+Agents can also use the filesystem as a shared workspace for saving memories,
+plans, WIP, etc.
 
 ## Architecture
 
@@ -80,7 +80,8 @@ deno task plan prds/my-feature.md
 ### 3. Watch it go
 
 The runner picks up the event, dispatches it to matching agents, and each agent
-pushes new events that trigger the next stage. Every event is streamed to the terminal as ndjson.
+pushes new events that trigger the next stage. Every event is streamed to the
+terminal as ndjson.
 
 ## Included agents
 

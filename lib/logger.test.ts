@@ -1,15 +1,22 @@
 import { assertEquals } from "@std/assert";
-import { create, type LogDriver, type LogEntry, Logger } from "./logger.ts";
+import {
+  create,
+  fileJsonDriver,
+  type LogDriver,
+  type LogEntry,
+  Logger,
+  multiDriver,
+} from "./logger.ts";
 
 /** Creates a mock driver that captures log entries */
 const createMockDriver = (): LogDriver & { entries: LogEntry[] } => {
   const entries: LogEntry[] = [];
   return {
     entries,
-    debug: (entry) => entries.push({ ...entry, level: "debug" }),
-    info: (entry) => entries.push({ ...entry, level: "info" }),
-    warn: (entry) => entries.push({ ...entry, level: "warn" }),
-    error: (entry) => entries.push({ ...entry, level: "error" }),
+    debug: (entry) => entries.push(entry),
+    info: (entry) => entries.push(entry),
+    warn: (entry) => entries.push(entry),
+    error: (entry) => entries.push(entry),
   };
 };
 
@@ -169,4 +176,95 @@ Deno.test("create - factory function with no arguments creates default logger", 
   logger.info("test message");
 
   assertEquals(driver.entries[0].msg, "test message");
+});
+
+// --- level field tests ---
+
+Deno.test("Logger - includes level field in log entries", () => {
+  const driver = createMockDriver();
+  const logger = new Logger({}, { driver });
+
+  logger.debug("d");
+  logger.info("i");
+  logger.warn("w");
+  logger.error("e");
+
+  assertEquals(driver.entries[0].level, "debug");
+  assertEquals(driver.entries[1].level, "info");
+  assertEquals(driver.entries[2].level, "warn");
+  assertEquals(driver.entries[3].level, "error");
+});
+
+// --- fileJsonDriver tests ---
+
+Deno.test({
+  name: "fileJsonDriver - creates parent dir and writes NDJSON lines",
+  sanitizeResources: false,
+  fn() {
+    const tmpDir = Deno.makeTempDirSync();
+    const logPath = `${tmpDir}/subdir/test.log`;
+    const driver = fileJsonDriver(logPath);
+    const logger = new Logger({}, { driver });
+
+    logger.info("first line");
+    logger.warn("second line");
+
+    const content = Deno.readTextFileSync(logPath);
+    const lines = content.trim().split("\n");
+    assertEquals(lines.length, 2);
+
+    const entry1 = JSON.parse(lines[0]);
+    assertEquals(entry1.msg, "first line");
+    assertEquals(entry1.level, "info");
+
+    const entry2 = JSON.parse(lines[1]);
+    assertEquals(entry2.msg, "second line");
+    assertEquals(entry2.level, "warn");
+
+    Deno.removeSync(tmpDir, { recursive: true });
+  },
+});
+
+Deno.test({
+  name: "fileJsonDriver - appends to existing file",
+  sanitizeResources: false,
+  fn() {
+    const tmpDir = Deno.makeTempDirSync();
+    const logPath = `${tmpDir}/test.log`;
+
+    // Write first batch
+    const driver1 = fileJsonDriver(logPath);
+    new Logger({}, { driver: driver1 }).info("batch 1");
+
+    // Write second batch with new driver instance
+    const driver2 = fileJsonDriver(logPath);
+    new Logger({}, { driver: driver2 }).info("batch 2");
+
+    const content = Deno.readTextFileSync(logPath);
+    const lines = content.trim().split("\n");
+    assertEquals(lines.length, 2);
+    assertEquals(JSON.parse(lines[0]).msg, "batch 1");
+    assertEquals(JSON.parse(lines[1]).msg, "batch 2");
+
+    Deno.removeSync(tmpDir, { recursive: true });
+  },
+});
+
+// --- multiDriver tests ---
+
+Deno.test("multiDriver - fans out to all drivers", () => {
+  const driver1 = createMockDriver();
+  const driver2 = createMockDriver();
+  const multi = multiDriver(driver1, driver2);
+  const logger = new Logger({}, { driver: multi });
+
+  logger.info("hello");
+  logger.error("oops");
+
+  assertEquals(driver1.entries.length, 2);
+  assertEquals(driver2.entries.length, 2);
+  assertEquals(driver1.entries[0].msg, "hello");
+  assertEquals(driver2.entries[0].msg, "hello");
+  assertEquals(driver1.entries[1].msg, "oops");
+  assertEquals(driver2.entries[1].msg, "oops");
 });
