@@ -52,9 +52,3 @@ export const matchesListen = (
   }
   return false;
 };
-
-/** Filter events to those matching a listener's listen patterns. */
-export const filterMatchedEvents = (
-  events: Event[],
-  listener: ListenerDef,
-): Event[] => events.filter((e) => matchesListen(e, listener));

@@ -29,6 +29,8 @@ import { pipeStreamToFile } from "./stream.ts";
 
 const logger = mainLogger.child({ component: "agent-runner" });
 
+const POLL_BATCH_SIZE = 100;
+
 export type AgentDef = {
   id: string;
   description: string;
@@ -192,21 +194,31 @@ const forkAgent = async (
   projectRoot: string,
 ): Promise<void> => {
   const since = getSince(db, agent.id);
+  // omitWorkerId excludes the agent's own events (including lifecycle events it
+  // pushed). This prevents self-triggering: the cursor still advances past the
+  // agent's own events, but they are never yielded for matching.
   const allEvents = getEventsSince(db, {
     sinceId: since,
-    limit: 100,
+    limit: POLL_BATCH_SIZE,
     omitWorkerId: agent.id,
   });
 
   for (const event of allEvents) {
     if (matchesListen(event, agent)) {
-      pushEvent(db, agent.id, "agent.start", { event_id: event.id });
+      pushEvent(db, agent.id, "agent.start", {
+        event_id: event.id,
+        event_type: event.type,
+      });
       const exitCode = await runAgent(agent, event, dbPath, projectRoot);
       if (exitCode === 0) {
-        pushEvent(db, agent.id, "agent.finish", { event_id: event.id });
+        pushEvent(db, agent.id, "agent.finish", {
+          event_id: event.id,
+          event_type: event.type,
+        });
       } else {
         pushEvent(db, agent.id, "agent.error", {
           event_id: event.id,
+          event_type: event.type,
           exit_code: exitCode,
         });
       }
@@ -234,7 +246,7 @@ export const runPollLoop = async ({
   try {
     while (true) {
       // Emit all new events as NDJSON on stdout
-      const stdoutEvents = pollEvents(db, "_stdout", 100);
+      const stdoutEvents = pollEvents(db, "_stdout", POLL_BATCH_SIZE);
       for (const event of stdoutEvents) {
         console.log(JSON.stringify(event));
       }
@@ -249,7 +261,12 @@ export const runPollLoop = async ({
       // Agents run in parallel, but each agent fork processes each event sequentially.
       // Waiting for the parallel forks to settle ensures that each agent's cursor
       // advances without skipping over any events.
-      await Promise.allSettled(forks);
+      const results = await Promise.allSettled(forks);
+      for (const result of results) {
+        if (result.status === "rejected") {
+          logger.error("Agent fork failed", { error: result.reason });
+        }
+      }
 
       await sleep(pollIntervalMs);
     }
