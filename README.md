@@ -1,23 +1,40 @@
 # busytown
 
-A multi-agent coordination framework built around a shared SQLite event queue. Each agent is a separate Claude Code instance. Agents listen for events, react to them, and push new events — forming an asynchronous pipeline where no agent needs to know about any other agent, only about the events.
+_A town full of busy little guys who do things._
+
+**busytown** is a multi-agent coordination framework built around a shared SQLite event queue.
+Each agent is a separate Claude Code instance. Agents listen for events, react
+to them, and push new events — forming an asynchronous pipeline where no agent
+needs to know about any other agent, only about the events.
+
+<p><img src="./busytown.png" src="A town full of busy little guys who do things" /></p>
 
 ## How it works
 
-Everything is stored in a single SQLite database (`events.db`). Events are simple JSON objects:
+Everything is stored in a single SQLite database (`events.db`). Events are
+simple JSON objects:
 
 ```json
-{ "id": 1, "type": "plan.request", "timestamp": "...", "worker_id": "user", "payload": {"prd_path": "prds/my-feature.md"} }
+{
+  "id": 1,
+  "type": "plan.request",
+  "timestamp": "...",
+  "worker_id": "user",
+  "payload": { "prd_path": "prds/my-feature.md" }
+}
 ```
 
-The agent runner polls the queue and dispatches events to matching agents. Each agent:
+The agent runner polls the queue and dispatches events to matching agents. Each
+agent:
 
-- **Listens** for specific event types (exact match, prefix glob like `file.*`, or wildcard `*`)
+- **Listens** for specific event types (exact match, prefix glob like `file.*`,
+  or wildcard `*`)
 - **Reacts** by reading files, writing code, producing artifacts
 - **Pushes** new events to notify other agents of what it did
 - **Claims** events when needed, so only one agent acts on a given event
 
-Agents use the filesystem as a shared workspace. Memories, plans, scratch work, etc all live as files in the repo.
+Agents use the filesystem as a shared workspace. Memories, plans, scratch work,
+etc all live as files in the repo.
 
 ## Architecture
 
@@ -40,7 +57,8 @@ Agents use the filesystem as a shared workspace. Memories, plans, scratch work, 
 
 ## Getting started
 
-**Prerequisites:** [Deno](https://deno.land/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed.
+**Prerequisites:** [Deno](https://deno.land/) and
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed.
 
 ### 1. Start the agent runner
 
@@ -64,7 +82,8 @@ deno task plan prds/my-feature.md
 
 ### 3. Watch it go
 
-The runner picks up the event, dispatches it to matching agents, and each agent pushes new events that trigger the next stage.
+The runner picks up the event, dispatches it to matching agents, and each agent
+pushes new events that trigger the next stage.
 
 ```bash
 # Stream events as ndjson
@@ -75,13 +94,14 @@ deno task event-queue watch
 
 The `agents/` directory ships with a **plan-code-review loop**:
 
-| Agent | Listens for | Does | Pushes |
-|-------|-------------|------|--------|
-| **plan** | `plan.request`, `review.created` | Reads a PRD, explores the codebase, writes an implementation plan to `plans/` | `plan.created` |
-| **code** | `plan.created` | Follows the plan to implement code changes | `code.review` |
-| **review** | `code.review` | Reviews the diff for correctness, writes a review to `reviews/` | `review.created` (verdict: approve or revise) |
+| Agent      | Listens for                      | Does                                                                          | Pushes                                        |
+| ---------- | -------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------- |
+| **plan**   | `plan.request`, `review.created` | Reads a PRD, explores the codebase, writes an implementation plan to `plans/` | `plan.created`                                |
+| **code**   | `plan.created`                   | Follows the plan to implement code changes                                    | `code.review`                                 |
+| **review** | `code.review`                    | Reviews the diff for correctness, writes a review to `reviews/`               | `review.created` (verdict: approve or revise) |
 
-If the reviewer says "revise", the plan agent picks it up and the loop continues until approval.
+If the reviewer says "revise", the plan agent picks it up and the loop continues
+until approval.
 
 ## Writing your own agent
 
@@ -97,8 +117,8 @@ allowed_tools:
   - "Write"
 ---
 
-You are a summarizer agent. When a new file is created, read it and write
-a summary to `summaries/<filename>.md`.
+You are a summarizer agent. When a new file is created, read it and write a
+summary to `summaries/<filename>.md`.
 
 After writing the summary, push an event:
 
@@ -107,13 +127,18 @@ After writing the summary, push an event:
 ```
 
 **Fields:**
+
 - `description` — What the agent does (included in its system prompt context)
-- `listen` — Event types to react to. Supports exact match (`plan.created`), prefix glob (`file.*`), or wildcard (`*`)
-- `allowed_tools` — Claude Code tools the agent can use (e.g. `Read`, `Write`, `Edit`, `Grep`, `Glob`, `Bash(git:*)`)
+- `listen` — Event types to react to. Supports exact match (`plan.created`),
+  prefix glob (`file.*`), or wildcard (`*`)
+- `allowed_tools` — Claude Code tools the agent can use (e.g. `Read`, `Write`,
+  `Edit`, `Grep`, `Glob`, `Bash(git:*)`)
 
-The agent's markdown body becomes its system prompt. The runner automatically injects context about the event queue CLI so agents know how to push events.
+The agent's markdown body becomes its system prompt. The runner automatically
+injects context about the event queue CLI so agents know how to push events.
 
-Each agent runs as a headless Claude Code subprocess (`claude --print`), sandboxed to only the tools you allow.
+Each agent runs as a headless Claude Code subprocess (`claude --print`),
+sandboxed to only the tools you allow.
 
 ## Event queue CLI
 
@@ -164,21 +189,31 @@ status                 # Check if daemon is running
 
 ## File system watcher
 
-The runner can optionally watch directories and push `file.created`, `file.modified`, and `file.deleted` events:
+The runner can optionally watch directories and push `file.created`,
+`file.modified`, and `file.deleted` events:
 
 ```bash
 deno task agent-runner run --watch src,docs
 ```
 
-This lets you build agents that react to file changes — useful for auto-indexing, summarization, or triggering builds.
+This lets you build agents that react to file changes — useful for
+auto-indexing, summarization, or triggering builds.
 
 ## Key concepts
 
-- **Cursor-based delivery** — Each worker maintains its own cursor in the queue, enabling reliable at-least-once delivery. Workers only see events newer than their cursor.
-- **First-claim-wins** — When multiple agents listen for the same event type, `claimEvent()` ensures only one agent processes a given event.
-- **Namespace wildcards** — Event types use dot-separated namespaces. Agents can listen for `file.*` to catch `file.created`, `file.modified`, etc.
-- **Agents are just markdown** — Agent definitions are markdown files. The body is the system prompt, the frontmatter is config. Easy to version, review, and iterate on.
-- **No agent coupling** — Agents don't know about each other. They only know about events. You can add, remove, or swap agents without changing anything else.
+- **Cursor-based delivery** — Each worker maintains its own cursor in the queue,
+  enabling reliable at-least-once delivery. Workers only see events newer than
+  their cursor.
+- **First-claim-wins** — When multiple agents listen for the same event type,
+  `claimEvent()` ensures only one agent processes a given event.
+- **Namespace wildcards** — Event types use dot-separated namespaces. Agents can
+  listen for `file.*` to catch `file.created`, `file.modified`, etc.
+- **Agents are just markdown** — Agent definitions are markdown files. The body
+  is the system prompt, the frontmatter is config. Easy to version, review, and
+  iterate on.
+- **No agent coupling** — Agents don't know about each other. They only know
+  about events. You can add, remove, or swap agents without changing anything
+  else.
 
 ## License
 
