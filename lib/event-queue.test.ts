@@ -3,6 +3,7 @@ import {
   claimEvent,
   getClaimant,
   getEventsSince,
+  getOrCreateCursor,
   getSince,
   openDb,
   pollEvents,
@@ -259,6 +260,8 @@ Deno.test("getEventsSince - events are ordered by id ascending", () => {
 
 Deno.test("pollEvents - returns new events and advances cursor", () => {
   const db = freshDb();
+  // Pre-set cursor so the worker sees events pushed after it
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
@@ -270,6 +273,7 @@ Deno.test("pollEvents - returns new events and advances cursor", () => {
 
 Deno.test("pollEvents - second poll returns only new events", () => {
   const db = freshDb();
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
@@ -294,6 +298,7 @@ Deno.test("pollEvents - returns empty array and does not advance cursor when no 
 
 Deno.test("pollEvents - omitWorkerId excludes self-events", () => {
   const db = freshDb();
+  updateCursor(db, "w1", 0);
   pushEvent(db, "w1", "own-event");
   pushEvent(db, "w2", "other-event");
 
@@ -305,6 +310,7 @@ Deno.test("pollEvents - omitWorkerId excludes self-events", () => {
 
 Deno.test("pollEvents - respects limit", () => {
   const db = freshDb();
+  updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
   pushEvent(db, "w1", "c");
@@ -428,5 +434,52 @@ Deno.test("getEventsSince - tail with filterType returns last N of that type", (
   assertEquals(events[0].type, "task.created");
   assertEquals(events[1].type, "task.created");
   assertEquals(events[0].id < events[1].id, true);
+  db.close();
+});
+
+// --- getOrCreateCursor ---
+
+Deno.test("getOrCreateCursor - returns cursor.create event ID for new worker", () => {
+  const db = freshDb();
+  const since = getOrCreateCursor(db, "new-agent");
+  assertEquals(since > 0, true);
+  db.close();
+});
+
+Deno.test("getOrCreateCursor - pushes a cursor.create event for new worker", () => {
+  const db = freshDb();
+  getOrCreateCursor(db, "new-agent");
+  const events = getEventsSince(db, { filterType: "cursor.create" });
+  assertEquals(events.length, 1);
+  assertEquals(events[0].worker_id, "runner");
+  assertEquals(
+    (events[0].payload as { agent_id: string }).agent_id,
+    "new-agent",
+  );
+  db.close();
+});
+
+Deno.test("getOrCreateCursor - returns existing cursor value without pushing events", () => {
+  const db = freshDb();
+  updateCursor(db, "existing-agent", 42);
+  const since = getOrCreateCursor(db, "existing-agent");
+  assertEquals(since, 42);
+  const events = getEventsSince(db, { filterType: "cursor.create" });
+  assertEquals(events.length, 0);
+  db.close();
+});
+
+Deno.test("getOrCreateCursor - new worker skips pre-existing events when used with getEventsSince", () => {
+  const db = freshDb();
+  pushEvent(db, "w1", "old.event");
+  pushEvent(db, "w1", "old.event");
+
+  const since = getOrCreateCursor(db, "late-joiner");
+
+  pushEvent(db, "w1", "new.event");
+
+  const events = getEventsSince(db, { sinceId: since });
+  assertEquals(events.length, 1);
+  assertEquals(events[0].type, "new.event");
   db.close();
 });

@@ -207,7 +207,7 @@ export const pollEvents = (
   limit = 100,
   omitWorkerId?: string,
 ): Event[] => {
-  const since = getSince(db, workerId);
+  const since = getOrCreateCursor(db, workerId);
   const events = getEventsSince(db, { sinceId: since, limit, omitWorkerId });
   if (events.length > 0) {
     updateCursor(db, workerId, events[events.length - 1].id);
@@ -234,6 +234,35 @@ export const updateCursor = (
     "INSERT INTO worker_cursors (worker_id, since, timestamp) VALUES (?, ?, unixepoch()) ON CONFLICT(worker_id) DO UPDATE SET since = excluded.since, timestamp = excluded.timestamp",
   );
   stmt.run(workerId, sinceId);
+};
+
+/**
+ * Gets or creates a cursor for a worker.
+ *
+ * If the worker already has a cursor, returns its current position.
+ * Otherwise, pushes a `cursor.create` event, sets the cursor to that
+ * event's ID, and returns it — so the new worker starts from the current
+ * tail rather than replaying all history.
+ *
+ * @param db - Database connection
+ * @param workerId - Worker ID to look up or initialize
+ * @returns The cursor position (existing or newly created)
+ */
+export const getOrCreateCursor = (
+  db: DatabaseSync,
+  workerId: string,
+): number => {
+  return transaction(db, () => {
+    const existing = db.prepare(
+      "SELECT since FROM worker_cursors WHERE worker_id = ?",
+    ).get(workerId) as { since: number } | undefined;
+    if (existing) return existing.since;
+    const event = pushEvent(db, "runner", "cursor.create", {
+      agent_id: workerId,
+    });
+    updateCursor(db, workerId, event.id);
+    return event.id;
+  });
 };
 
 /**
