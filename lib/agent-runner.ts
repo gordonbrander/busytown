@@ -16,7 +16,7 @@ import { matchesListen } from "./event.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   getEventsSince,
-  getSince,
+  getOrCreateCursor,
   openDb,
   pollEvents,
   pushEvent,
@@ -194,7 +194,7 @@ const forkAgent = async (
   projectRoot: string,
 ): Promise<boolean> => {
   try {
-    const since = getSince(db, agent.id);
+    const since = getOrCreateCursor(db, agent.id);
     // omitWorkerId excludes the agent's own events (including lifecycle events it
     // pushed). This prevents self-triggering: the cursor still advances past the
     // agent's own events, but they are never yielded for matching.

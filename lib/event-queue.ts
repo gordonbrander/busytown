@@ -237,6 +237,35 @@ export const updateCursor = (
 };
 
 /**
+ * Gets or creates a cursor for a worker.
+ *
+ * If the worker already has a cursor, returns its current position.
+ * Otherwise, pushes a `cursor.create` event, sets the cursor to that
+ * event's ID, and returns it — so the new worker starts from the current
+ * tail rather than replaying all history.
+ *
+ * @param db - Database connection
+ * @param workerId - Worker ID to look up or initialize
+ * @returns The cursor position (existing or newly created)
+ */
+export const getOrCreateCursor = (
+  db: DatabaseSync,
+  workerId: string,
+): number => {
+  return transaction(db, () => {
+    const existing = db.prepare(
+      "SELECT since FROM worker_cursors WHERE worker_id = ?",
+    ).get(workerId) as { since: number } | undefined;
+    if (existing) return existing.since;
+    const event = pushEvent(db, "runner", "cursor.create", {
+      agent_id: workerId,
+    });
+    updateCursor(db, workerId, event.id);
+    return event.id;
+  });
+};
+
+/**
  * Claims an event for a worker (first-claim-wins).
  *
  * Uses INSERT OR IGNORE with the PRIMARY KEY constraint to ensure only the
