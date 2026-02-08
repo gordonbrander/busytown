@@ -26,8 +26,8 @@ event subscriptions.
    deno task events push --worker user --type file.change --payload '{"path":"src/app.ts"}'
    ```
 
-To run the agent runner in the foreground instead, use
-`deno task runner run` directly.
+To run the agent runner in the foreground instead, use `deno task runner run`
+directly.
 
 ## runner CLI
 
@@ -98,7 +98,6 @@ See [Event Queue CLI](event-queue.md) for the full reference.
 
 ## Supporting Skills
 
-- `events` — a skill describing the underlying `deno task events`
-  commands (`push`, `watch`, `since`, `list`, `cursor`, `claim`,
-  `check-claim`)
+- `events` — a skill describing the underlying `deno task events` commands
+  (`push`, `watch`, `since`, `list`, `cursor`, `claim`, `check-claim`)
 - `create-agent` — a skill for helping the user define new agent files

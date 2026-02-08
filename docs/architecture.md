@@ -164,8 +164,8 @@ automatically.
 - **description** — included in the agent's system prompt for self-awareness
 - **listen** — event types to react to (see matching below)
 - **allowed_tools** — Claude Code tools the agent can use. The runner
-  auto-injects `Bash(deno task events:*)` so agents can always push events
-  and claim work.
+  auto-injects `Bash(deno task events:*)` so agents can always push events and
+  claim work.
 
 ### Listen matching
 
