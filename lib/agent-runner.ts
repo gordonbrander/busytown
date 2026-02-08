@@ -17,6 +17,7 @@ import { openDb, pollEvents } from "./event-queue.ts";
 import { runFsWatcher } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
 import { sleep } from "./utils.ts";
+import { pipeStreamToFile } from "./stream.ts";
 
 const logger = mainLogger.child({ component: "agent-runner" });
 
@@ -131,10 +132,22 @@ export const runAgent = async (
   dbPath: string,
   projectRoot: string,
 ): Promise<void> => {
-  logger.info("Agent running", { agent: agent.id });
+  logger.info("Agent running", {
+    agent: agent.id,
+    events: events.map((e) => e.type),
+  });
   const systemPrompt = buildSystemPrompt(agent, dbPath);
   const userMessage = JSON.stringify(events);
   const toolArgs = buildToolArgs(agent.allowedTools);
+
+  const logsDir = join(projectRoot, "logs");
+  await Deno.mkdir(logsDir, { recursive: true });
+  const logPath = join(logsDir, `${agent.id}.log`);
+  const logFile = await Deno.open(logPath, {
+    write: true,
+    create: true,
+    append: true,
+  });
 
   const cmd = new Deno.Command("claude", {
     args: [
@@ -148,8 +161,8 @@ export const runAgent = async (
     ],
     cwd: projectRoot,
     stdin: "piped",
-    stdout: "inherit",
-    stderr: "inherit",
+    stdout: "piped",
+    stderr: "piped",
   });
 
   const process = cmd.spawn();
@@ -157,7 +170,12 @@ export const runAgent = async (
   await writer.write(textEncoder.encode(userMessage));
   await writer.close();
 
+  const stdoutPipe = pipeStreamToFile(process.stdout, logFile);
+  const stderrPipe = pipeStreamToFile(process.stderr, logFile);
+
   const { code } = await process.status;
+  await Promise.all([stdoutPipe, stderrPipe]);
+  logFile.close();
 
   if (code !== 0) {
     logger.error("Agent exit", { agent: agent.id, code });
@@ -184,13 +202,14 @@ export const runPollLoop = async ({
 
   try {
     while (true) {
+      // Emit all new events as NDJSON on stdout
+      const stdoutEvents = pollEvents(db, "_stdout", 100);
+      for (const event of stdoutEvents) {
+        console.log(JSON.stringify(event));
+      }
+
       // Load agents fresh each time, so we pick up new ones
       const agents = await loadAllAgents(agentsDir, agentFilter);
-      logger.info("Poll", {
-        db: dbPath,
-        interval_ms: pollIntervalMs,
-        agents: agents.map((agent) => agent.id),
-      });
 
       for (const agent of agents) {
         // Poll with per-agent cursor, excluding events from self
@@ -198,10 +217,9 @@ export const runPollLoop = async ({
         const matched = filterMatchedEvents(allEvents, agent);
         if (matched.length === 0) continue;
 
-        logger.info("dispatch", {
+        logger.info("Event dispatch", {
           agent: agent.id,
-          count: matched.length,
-          event_types: matched.map((e) => e.type),
+          events: matched.map((e) => e.type),
         });
 
         runAgent(agent, matched, dbPath, projectRoot);

@@ -168,7 +168,7 @@ const runCmd = new Command()
   )
   .option("--db <path:file>", "Database path", { default: "events.db" })
   .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 5000,
+    default: 1000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
   .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
@@ -204,7 +204,7 @@ const startCmd = new Command()
   )
   .option("--db <path:file>", "Database path", { default: "events.db" })
   .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 5000,
+    default: 1000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
   .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
@@ -238,7 +238,7 @@ const restartCmd = new Command()
   )
   .option("--db <path:file>", "Database path", { default: "events.db" })
   .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 5000,
+    default: 1000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
   .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
@@ -281,7 +281,7 @@ const daemonCmd = new Command()
   )
   .option("--db <path:file>", "Database path", { default: "events.db" })
   .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 5000,
+    default: 1000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
   .option("--agent-cwd <path:file>", "Working directory for sub-agents", {

@@ -1,9 +1,4 @@
-import {
-  consoleJsonDriver,
-  fileJsonDriver,
-  Logger,
-  multiDriver,
-} from "./logger.ts";
+import { fileJsonDriver, Logger } from "./logger.ts";
 
 /** Top level logger */
 export const logger = new Logger(
@@ -11,7 +6,7 @@ export const logger = new Logger(
     component: "busytown",
   },
   {
-    driver: multiDriver(consoleJsonDriver(), fileJsonDriver("busytown.log")),
+    driver: fileJsonDriver("busytown.log"),
   },
 );
 

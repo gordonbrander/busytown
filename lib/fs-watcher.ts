@@ -13,7 +13,7 @@ import { globToRegExp } from "@std/path";
 import { openDb, pushEvent } from "./event-queue.ts";
 import mainLogger from "./main-logger.ts";
 
-const logger = mainLogger.child({ module: "fs-watcher" });
+const logger = mainLogger.child({ component: "fs-watcher" });
 
 export type FsWatcherConfig = {
   watchPaths: string[];
@@ -95,7 +95,6 @@ export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
           continue;
         }
         pushEvent(db, "fs-watcher", eventType, { path: relPath });
-        logger.debug("Event pushed", { type: eventType, path: relPath });
       }
     }
   } finally {
