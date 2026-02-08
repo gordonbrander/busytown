@@ -1,7 +1,7 @@
 {
   "tasks": {
-    "event-queue": "deno run --allow-read --allow-write scripts/event-queue.ts",
-    "agent-runner": "deno run --allow-read --allow-write --allow-run scripts/agent-runner.ts",
+    "events": "deno run --allow-read --allow-write scripts/events.ts",
+    "runner": "deno run --allow-read --allow-write --allow-run scripts/runner.ts",
     "plan": "bash scripts/plan-request.sh",
     "test": "deno test --allow-read --allow-write"
   },

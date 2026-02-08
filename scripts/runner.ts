@@ -1,18 +1,18 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
 /**
  * CLI wrapper for the agent runner with daemon management.
- * @module agent-runner
+ * @module runner
  */
 
 import { Command } from "@cliffy/command";
-import { runLoop } from "../lib/agent-runner.ts";
+import { runLoop } from "../lib/runner.ts";
 import mainLogger from "../lib/main-logger.ts";
 
 const logger = mainLogger.child({ component: "daemon" });
 
 // --- Constants ---
 
-const PID_FILE = ".agent-runner.pid";
+const PID_FILE = ".runner.pid";
 const LOG_FILE = ".daemon-stderr.log";
 
 // --- Utility functions ---
@@ -123,7 +123,7 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
     "--allow-read",
     "--allow-write",
     "--allow-run",
-    "scripts/agent-runner.ts",
+    "scripts/runner.ts",
     "_daemon",
   ];
   const runnerArgs = serializeRunnerArgs(options);
@@ -321,7 +321,7 @@ const daemonCmd = new Command()
 // --- Top-level assembly ---
 
 await new Command()
-  .name("agent-runner")
+  .name("runner")
   .description("Agent runner with daemon management.")
   .command("run", runCmd)
   .command("start", startCmd)

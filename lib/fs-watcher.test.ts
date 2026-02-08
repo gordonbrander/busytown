@@ -29,12 +29,12 @@ Deno.test("shouldExclude - ignores .DS_Store", () => {
 });
 
 Deno.test("shouldExclude - ignores .pid files", () => {
-  assertEquals(shouldExclude(".agent-runner.pid", defaultCompiled), true);
+  assertEquals(shouldExclude(".runner.pid", defaultCompiled), true);
   assertEquals(shouldExclude("server.pid", defaultCompiled), true);
 });
 
 Deno.test("shouldExclude - ignores .log files", () => {
-  assertEquals(shouldExclude(".agent-runner.log", defaultCompiled), true);
+  assertEquals(shouldExclude(".runner.log", defaultCompiled), true);
   assertEquals(shouldExclude("app.log", defaultCompiled), true);
   assertEquals(shouldExclude("error.log", defaultCompiled), true);
 });

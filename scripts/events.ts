@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write
 /**
  * CLI wrapper for the event queue.
- * @module event-queue
+ * @module events
  */
 
 import { Command } from "@cliffy/command";
@@ -18,7 +18,7 @@ import {
 import { sleep } from "../lib/utils.ts";
 
 await new Command()
-  .name("event-queue")
+  .name("events")
   .description("CLI wrapper for the event queue.")
   .globalOption("--db <path:string>", "Database path", { default: "events.db" })
   .command("watch")
@@ -72,7 +72,7 @@ await new Command()
       db.close();
     }
   })
-  .command("events")
+  .command("list")
   .description("Get events after a given id.")
   .option("--since <id:string>", "Event ID to start after")
   .option("--limit <n:string>", "Maximum number of events")
