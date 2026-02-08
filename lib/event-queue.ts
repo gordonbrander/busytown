@@ -12,6 +12,7 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
+import type { Event, RawEventRow } from "./event.ts";
 import mainLogger from "./main-logger.ts";
 
 const logger = mainLogger.child({ component: "event-queue" });
@@ -26,7 +27,7 @@ const logger = mainLogger.child({ component: "event-queue" });
  * @returns The opened database connection
  */
 export const openDb = (path: string): DatabaseSync => {
-  logger.info("Setting up database", { db: path });
+  logger.info("Opening database", { db: path });
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
@@ -75,28 +76,6 @@ const transaction = <T>(db: DatabaseSync, fn: () => T): T => {
     throw err;
   }
 };
-
-/**
- * A parsed event with deserialized payload.
- *
- * @property id - Unique auto-incrementing event ID
- * @property timestamp - Unix epoch timestamp when the event was created
- * @property type - Event type identifier (e.g., "task.created", "message.sent")
- * @property worker_id - ID of the worker that pushed this event
- * @property payload - Deserialized JSON payload data
- */
-export type Event = {
-  id: number;
-  timestamp: number;
-  type: string;
-  worker_id: string;
-  payload: unknown;
-};
-
-/**
- * Raw database row before JSON payload deserialization.
- */
-export type RawEventRow = Omit<Event, "payload"> & { payload: string };
 
 /**
  * Inserts a new event into the queue.

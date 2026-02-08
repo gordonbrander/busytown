@@ -5,7 +5,7 @@
  */
 
 import { Command } from "@cliffy/command";
-import { runPollLoop } from "../lib/agent-runner.ts";
+import { runLoop } from "../lib/agent-runner.ts";
 import mainLogger from "../lib/main-logger.ts";
 
 const logger = mainLogger.child({ component: "daemon" });
@@ -13,7 +13,7 @@ const logger = mainLogger.child({ component: "daemon" });
 // --- Constants ---
 
 const PID_FILE = ".agent-runner.pid";
-const LOG_FILE = "logs/daemon-stderr.log";
+const LOG_FILE = ".daemon-stderr.log";
 
 // --- Utility functions ---
 
@@ -96,37 +96,16 @@ function serializeRunnerArgs(options: RunnerOptions): string[] {
   const args: string[] = [];
   if (options.agentsDir) args.push("--agents-dir", options.agentsDir);
   if (options.db) args.push("--db", options.db);
-  if (options.poll) args.push("--poll", options.poll);
+  if (options.poll != null) args.push("--poll", String(options.poll));
   if (options.agent) args.push("--agent", options.agent);
   if (options.agentCwd) args.push("--agent-cwd", options.agentCwd);
-  if (options.watch) args.push("--watch", options.watch);
-  if (options.watchIgnore) args.push("--watch-ignore", options.watchIgnore);
-  if (options.watchDebounce) {
-    args.push("--watch-debounce", options.watchDebounce);
+  if (options.watch) {
+    for (const w of options.watch) args.push("--watch", w);
+  }
+  if (options.exclude) {
+    for (const e of options.exclude) args.push("--exclude", e);
   }
   return args;
-}
-
-/** Execute the poll loop with the given CLI options. */
-async function execRunPollLoop(
-  options: RunnerOptions,
-): Promise<void> {
-  await runPollLoop({
-    agentsDir: options.agentsDir,
-    dbPath: options.db,
-    pollIntervalMs: parseFloat(options.poll) * 1000,
-    agentFilter: options.agent,
-    agentCwd: options.agentCwd,
-    watchPaths: options.watch
-      ? options.watch.split(",").map((s: string) => s.trim())
-      : undefined,
-    watchIgnore: options.watchIgnore
-      ? options.watchIgnore.split(",").map((s: string) => s.trim())
-      : undefined,
-    watchDebounceMs: options.watchDebounce
-      ? parseInt(options.watchDebounce, 10)
-      : undefined,
-  });
 }
 
 // --- Core daemon functions ---
@@ -183,59 +162,63 @@ async function stopDaemon(): Promise<void> {
 const runCmd = new Command()
   .description("Start the agent poll loop (foreground).")
   .option(
-    "--agents-dir <path:string>",
+    "--agents-dir <path:file>",
     "Directory containing agent .md files",
     { default: "agents/" },
   )
-  .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", {
-    default: "5",
+  .option("--db <path:file>", "Database path", { default: "events.db" })
+  .option("--poll <ms:number>", "Poll interval in ms", {
+    default: 5000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
     default: ".",
   })
   .option(
-    "--watch <paths:string>",
-    "Comma-separated paths to watch for FS changes",
+    "--watch <paths:file[]>",
+    "Paths to watch for FS changes",
+    { default: ["."] as string[] },
   )
   .option(
-    "--watch-ignore <patterns:string>",
-    "Comma-separated additional ignore patterns",
+    "--exclude <patterns:string[]>",
+    "Comma-separated exclude patterns (exact or glob)",
   )
-  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
-    default: "200",
-  })
   .action(async (options) => {
-    await execRunPollLoop(options);
+    await runLoop({
+      agentsDir: options.agentsDir,
+      agentCwd: options.agentCwd ?? Deno.cwd(),
+      agentFilter: options.agent,
+      dbPath: options.db,
+      pollIntervalMs: options.poll,
+      watchPaths: options.watch,
+      excludePaths: options.exclude ?? [],
+    });
   });
 
 const startCmd = new Command()
   .description("Start the agent runner as a background daemon.")
   .option(
-    "--agents-dir <path:string>",
+    "--agents-dir <path:file>",
     "Directory containing agent .md files",
     { default: "agents/" },
   )
-  .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", {
-    default: "5",
+  .option("--db <path:file>", "Database path", { default: "events.db" })
+  .option("--poll <ms:number>", "Poll interval in ms", {
+    default: 5000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
     default: ".",
   })
   .option(
-    "--watch <paths:string>",
-    "Comma-separated paths to watch for FS changes",
+    "--watch <paths:file[]>",
+    "Paths to watch for FS changes",
+    { default: ["."] as string[] },
   )
   .option(
-    "--watch-ignore <patterns:string>",
-    "Comma-separated additional ignore patterns",
+    "--exclude <patterns:string[]>",
+    "Comma-separated exclude patterns (exact or glob)",
   )
-  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
-    default: "200",
-  })
   .action(async (options) => {
     await startDaemon(options);
   });
@@ -249,29 +232,27 @@ const stopCmd = new Command()
 const restartCmd = new Command()
   .description("Restart the background daemon.")
   .option(
-    "--agents-dir <path:string>",
+    "--agents-dir <path:file>",
     "Directory containing agent .md files",
     { default: "agents/" },
   )
-  .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", {
-    default: "5",
+  .option("--db <path:file>", "Database path", { default: "events.db" })
+  .option("--poll <ms:number>", "Poll interval in ms", {
+    default: 5000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
     default: ".",
   })
   .option(
-    "--watch <paths:string>",
-    "Comma-separated paths to watch for FS changes",
+    "--watch <paths:file[]>",
+    "Paths to watch for FS changes",
+    { default: ["."] as string[] },
   )
   .option(
-    "--watch-ignore <patterns:string>",
-    "Comma-separated additional ignore patterns",
+    "--exclude <patterns:string[]>",
+    "Comma-separated exclude patterns (exact or glob)",
   )
-  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
-    default: "200",
-  })
   .action(async (options) => {
     await stopDaemon();
     // Brief pause to let process fully exit
@@ -294,35 +275,41 @@ const daemonCmd = new Command()
   .description("Internal daemon loop (do not call directly).")
   .hidden()
   .option(
-    "--agents-dir <path:string>",
+    "--agents-dir <path:file>",
     "Directory containing agent .md files",
     { default: "agents/" },
   )
-  .option("--db <path:string>", "Database path", { default: "events.db" })
-  .option("--poll <seconds:string>", "Poll interval in seconds", {
-    default: "5",
+  .option("--db <path:file>", "Database path", { default: "events.db" })
+  .option("--poll <ms:number>", "Poll interval in ms", {
+    default: 5000,
   })
   .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:string>", "Working directory for sub-agents", {
+  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
     default: ".",
   })
   .option(
-    "--watch <paths:string>",
-    "Comma-separated paths to watch for FS changes",
+    "--watch <paths:file[]>",
+    "Paths to watch for FS changes",
+    { default: ["."] as string[] },
   )
   .option(
-    "--watch-ignore <patterns:string>",
-    "Comma-separated additional ignore patterns",
+    "--exclude <patterns:string[]>",
+    "Comma-separated exclude patterns (exact or glob)",
   )
-  .option("--watch-debounce <ms:string>", "Debounce window in ms", {
-    default: "200",
-  })
   .action(async (options) => {
     // Auto-restart loop
     while (true) {
       logger.info("Daemon starting");
       try {
-        await execRunPollLoop(options);
+        await runLoop({
+          agentsDir: options.agentsDir,
+          agentCwd: options.agentCwd ?? Deno.cwd(),
+          agentFilter: options.agent,
+          dbPath: options.db,
+          pollIntervalMs: options.poll,
+          watchPaths: options.watch,
+          excludePaths: options.exclude ?? [],
+        });
       } catch (err) {
         logger.error("Daemon error", { error: String(err) });
       }

@@ -11,7 +11,7 @@ export const logger = new Logger(
     component: "busytown",
   },
   {
-    driver: multiDriver(consoleJsonDriver(), fileJsonDriver("logs")),
+    driver: multiDriver(consoleJsonDriver(), fileJsonDriver("busytown.log")),
   },
 );
 

@@ -11,6 +11,7 @@
     "jsr:@std/front-matter@1": "1.0.9",
     "jsr:@std/front-matter@^1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@std/path@1": "1.1.4",
     "jsr:@std/text@~1.0.7": "1.0.16",
     "jsr:@std/toml@^1.0.3": "1.0.11",
     "jsr:@std/yaml@^1.0.5": "1.0.11"
@@ -63,6 +64,12 @@
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
     },
+    "@std/path@1.1.4": {
+      "integrity": "1d2d43f39efb1b42f0b1882a25486647cb851481862dc7313390b2bb044314b5",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
     "@std/text@1.0.16": {
       "integrity": "ddb9853b75119a2473857d691cf1ec02ad90793a2e8b4a4ac49d7354281a0cf8"
     },
@@ -80,7 +87,8 @@
     "dependencies": [
       "jsr:@cliffy/command@1.0.0-rc.8",
       "jsr:@std/assert@1",
-      "jsr:@std/front-matter@^1.0.9"
+      "jsr:@std/front-matter@^1.0.9",
+      "jsr:@std/path@1"
     ]
   }
 }
