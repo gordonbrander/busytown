@@ -17,7 +17,7 @@ The agent runner polls the queue and dispatches events to matching agents. Each 
 - **Pushes** new events to notify other agents of what it did
 - **Claims** events when needed, so only one agent acts on a given event
 
-Agents use the filesystem as a shared workspace. Plans, reviews, and code all live as files in the repo.
+Agents use the filesystem as a shared workspace. Memories, plans, scratch work, etc all live as files in the repo.
 
 ## Architecture
 
