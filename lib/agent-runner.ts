@@ -139,12 +139,7 @@ export const runAgent = async (
   event: Event,
   dbPath: string,
   projectRoot: string,
-): Promise<boolean> => {
-  logger.info("Agent running", {
-    agent: agent.id,
-    event: event.type,
-    eventId: event.id,
-  });
+): Promise<number> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath);
   const userMessage = JSON.stringify(event);
   const toolArgs = buildToolArgs(agent.allowedTools);
@@ -186,12 +181,7 @@ export const runAgent = async (
   await Promise.all([stdoutPipe, stderrPipe]);
   logFile.close();
 
-  if (code !== 0) {
-    logger.error("Agent error", { agent: agent.id, eventId: event.id, code });
-    return false;
-  }
-  logger.info("Agent finished", { agent: agent.id, eventId: event.id });
-  return true;
+  return code;
 };
 
 /** Process events serially for a single agent, advancing cursor after each. */
@@ -211,11 +201,14 @@ const forkAgent = async (
   for (const event of allEvents) {
     if (matchesListen(event, agent)) {
       pushEvent(db, agent.id, "agent.start", { event_id: event.id });
-      const ok = await runAgent(agent, event, dbPath, projectRoot);
-      if (ok) {
+      const exitCode = await runAgent(agent, event, dbPath, projectRoot);
+      if (exitCode === 0) {
         pushEvent(db, agent.id, "agent.finish", { event_id: event.id });
       } else {
-        pushEvent(db, agent.id, "agent.error", { event_id: event.id });
+        pushEvent(db, agent.id, "agent.error", {
+          event_id: event.id,
+          exit_code: exitCode,
+        });
       }
     }
     updateCursor(db, agent.id, event.id);
