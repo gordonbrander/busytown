@@ -39,29 +39,29 @@ The event queue is the single source of truth. It lives in a SQLite database
 
 **events** — the append-only event log.
 
-| Column     | Type    | Description                          |
-|------------|---------|--------------------------------------|
-| id         | INTEGER | Auto-incrementing primary key        |
-| timestamp  | INTEGER | Unix epoch seconds (set by SQLite)   |
-| type       | TEXT    | Dot-separated event type             |
-| worker_id  | TEXT    | ID of the worker that pushed it      |
-| payload    | TEXT    | JSON string (defaults to `{}`)       |
+| Column    | Type    | Description                        |
+| --------- | ------- | ---------------------------------- |
+| id        | INTEGER | Auto-incrementing primary key      |
+| timestamp | INTEGER | Unix epoch seconds (set by SQLite) |
+| type      | TEXT    | Dot-separated event type           |
+| worker_id | TEXT    | ID of the worker that pushed it    |
+| payload   | TEXT    | JSON string (defaults to `{}`)     |
 
 **worker_cursors** — each worker's position in the event stream.
 
-| Column     | Type    | Description                          |
-|------------|---------|--------------------------------------|
-| worker_id  | TEXT    | Primary key                          |
-| since      | INTEGER | ID of the last processed event       |
-| timestamp  | INTEGER | When the cursor was last updated     |
+| Column    | Type    | Description                      |
+| --------- | ------- | -------------------------------- |
+| worker_id | TEXT    | Primary key                      |
+| since     | INTEGER | ID of the last processed event   |
+| timestamp | INTEGER | When the cursor was last updated |
 
 **claims** — first-claim-wins deduplication.
 
-| Column     | Type    | Description                          |
-|------------|---------|--------------------------------------|
-| event_id   | INTEGER | Primary key (one claim per event)    |
-| worker_id  | TEXT    | Who claimed it                       |
-| claimed_at | INTEGER | Unix epoch seconds                   |
+| Column     | Type    | Description                       |
+| ---------- | ------- | --------------------------------- |
+| event_id   | INTEGER | Primary key (one claim per event) |
+| worker_id  | TEXT    | Who claimed it                    |
+| claimed_at | INTEGER | Unix epoch seconds                |
 
 ### Event types
 
@@ -86,9 +86,9 @@ filtering by worker, type, and tail mode.
 worker's cursor, fetches new events, advances the cursor. This is the primary
 read path.
 
-**getOrCreateCursor(db, workerId)** — For existing workers, returns their cursor.
-For new workers, creates a cursor at the current tail so they only see future
-events (play-from-now semantics).
+**getOrCreateCursor(db, workerId)** — For existing workers, returns their
+cursor. For new workers, creates a cursor at the current tail so they only see
+future events (play-from-now semantics).
 
 **claimEvent(db, workerId, eventId)** — Uses `INSERT OR IGNORE` on the claims
 primary key. Only the first caller wins. Pushes a `claim.created` event on
@@ -105,8 +105,9 @@ success.
 
 ## Agent Runner
 
-The agent runner (`lib/agent-runner.ts`) is an infinite loop that polls the event
-queue and dispatches events to matching agents. It runs two concurrent tasks:
+The agent runner (`lib/agent-runner.ts`) is an infinite loop that polls the
+event queue and dispatches events to matching agents. It runs two concurrent
+tasks:
 
 1. **Poll loop** — loads agents, polls events, dispatches matches
 2. **FS watcher** — monitors the filesystem and pushes `file.*` events
@@ -135,8 +136,8 @@ For each agent, each iteration:
    `agent.finish` or `agent.error`
 5. Advance the cursor past every event (matched or not)
 
-Agents within a fork process events serially. Different agents run their forks in
-parallel.
+Agents within a fork process events serially. Different agents run their forks
+in parallel.
 
 ## Agents
 
@@ -154,8 +155,8 @@ allowed_tools:
   - "Bash(git:*)"
 ---
 
-System prompt goes here. The runner injects event queue CLI
-instructions automatically.
+System prompt goes here. The runner injects event queue CLI instructions
+automatically.
 ```
 
 ### Frontmatter fields
@@ -170,11 +171,11 @@ instructions automatically.
 
 Three patterns, checked in order:
 
-| Pattern         | Matches                                          |
-|-----------------|--------------------------------------------------|
-| `plan.created`  | Exact match on event type                        |
-| `file.*`        | Prefix glob — matches `file.created`, `file.modified`, etc. |
-| `*`             | Wildcard — matches everything except the agent's own events |
+| Pattern        | Matches                                                     |
+| -------------- | ----------------------------------------------------------- |
+| `plan.created` | Exact match on event type                                   |
+| `file.*`       | Prefix glob — matches `file.created`, `file.modified`, etc. |
+| `*`            | Wildcard — matches everything except the agent's own events |
 
 ### Agent invocation
 
@@ -193,30 +194,30 @@ body.
 
 ### Self-exclusion
 
-An agent never sees its own events. The runner uses `omitWorkerId: agent.id` when
-fetching events, so an agent's outputs (including lifecycle events) are skipped
-during matching. The cursor still advances past them.
+An agent never sees its own events. The runner uses `omitWorkerId: agent.id`
+when fetching events, so an agent's outputs (including lifecycle events) are
+skipped during matching. The cursor still advances past them.
 
 ### Lifecycle events
 
 The runner pushes these automatically around each agent invocation:
 
-| Event          | Payload                                |
-|----------------|----------------------------------------|
-| `agent.start`  | `{event_id, event_type}`               |
-| `agent.finish` | `{event_id, event_type}`               |
-| `agent.error`  | `{event_id, event_type, exit_code}`    |
+| Event          | Payload                             |
+| -------------- | ----------------------------------- |
+| `agent.start`  | `{event_id, event_type}`            |
+| `agent.finish` | `{event_id, event_type}`            |
+| `agent.error`  | `{event_id, event_type, exit_code}` |
 
 ## FS Watcher
 
 The filesystem watcher (`lib/fs-watcher.ts`) monitors directories with
 `Deno.watchFs` and pushes events to the queue:
 
-| FS event | Queue event      |
-|----------|------------------|
-| create   | `file.created`   |
-| modify   | `file.modified`  |
-| remove   | `file.deleted`   |
+| FS event | Queue event     |
+| -------- | --------------- |
+| create   | `file.created`  |
+| modify   | `file.modified` |
+| remove   | `file.deleted`  |
 
 Events are debounced (200ms) and filtered through exclude patterns. Common paths
 are excluded by default: `.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,
@@ -246,15 +247,15 @@ the first writer wins. This is atomic at the SQLite level.
 deno task event-queue <command> [--db <path>]
 ```
 
-| Command       | Description                                |
-|---------------|--------------------------------------------|
-| `push`        | Push an event (`--worker`, `--type`, `--payload`) |
+| Command       | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `push`        | Push an event (`--worker`, `--type`, `--payload`)                   |
 | `events`      | Query events (`--since`, `--limit`, `--tail`, `--type`, `--worker`) |
-| `watch`       | Stream new events as NDJSON (`--worker`, `--poll`) |
-| `since`       | Get a worker's cursor position (`--worker`) |
-| `cursor`      | Set a worker's cursor (`--worker`, `--set`) |
-| `claim`       | Claim an event (`--worker`, `--event`)      |
-| `check-claim` | Check who claimed an event (`--event`)      |
+| `watch`       | Stream new events as NDJSON (`--worker`, `--poll`)                  |
+| `since`       | Get a worker's cursor position (`--worker`)                         |
+| `cursor`      | Set a worker's cursor (`--worker`, `--set`)                         |
+| `claim`       | Claim an event (`--worker`, `--event`)                              |
+| `check-claim` | Check who claimed an event (`--event`)                              |
 
 ### Agent runner CLI
 
@@ -262,13 +263,13 @@ deno task event-queue <command> [--db <path>]
 deno task agent-runner <command> [options]
 ```
 
-| Command   | Description                    |
-|-----------|--------------------------------|
-| `run`     | Run poll loop in foreground     |
-| `start`   | Start as background daemon      |
-| `stop`    | Stop the daemon                 |
-| `restart` | Restart the daemon              |
-| `status`  | Check if daemon is running      |
+| Command   | Description                 |
+| --------- | --------------------------- |
+| `run`     | Run poll loop in foreground |
+| `start`   | Start as background daemon  |
+| `stop`    | Stop the daemon             |
+| `restart` | Restart the daemon          |
+| `status`  | Check if daemon is running  |
 
 Options: `--agents-dir`, `--db`, `--poll`, `--agent`, `--agent-cwd`, `--watch`,
 `--exclude`.
