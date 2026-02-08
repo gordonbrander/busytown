@@ -172,22 +172,29 @@ status                 # Check if daemon is running
 # Options
 --agents-dir <path>    # Agent definitions directory (default: agents/)
 --db <path>            # Database path (default: events.db)
---poll <seconds>       # Poll interval (default: 5)
+--poll <ms>            # Poll interval in ms (default: 5000)
 --agent <name>         # Run only a specific agent
 --agent-cwd <path>     # Working directory for agents (default: .)
---watch <paths>        # Comma-separated paths to watch for FS changes
---watch-ignore <pats>  # Additional ignore patterns for watcher
---watch-debounce <ms>  # Debounce window for FS events (default: 200)
+--watch <paths>        # Paths to watch for FS changes (default: .)
+--exclude <patterns>   # Glob patterns to exclude from watching
 ```
 
 ## File system watcher
 
-The runner can optionally watch directories and push `file.created`,
-`file.modified`, and `file.deleted` events:
+The runner watches directories for file system changes and pushes
+`file.created`, `file.modified`, and `file.deleted` events. By default it
+watches the current directory (`.`).
 
 ```bash
-deno task agent-runner run --watch src,docs
+# Watch specific directories
+deno task agent-runner run --watch src --watch docs
+
+# Exclude patterns (glob syntax)
+deno task agent-runner run --exclude '**/dist/**' --exclude '**/build/**'
 ```
+
+Common paths (`.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,
+`events.db*`) are excluded automatically.
 
 This lets you build agents that react to file changes — useful for
 auto-indexing, summarization, or triggering builds.
