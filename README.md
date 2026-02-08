@@ -1,4 +1,4 @@
-# dreams-lite
+# busytown
 
 A multi-agent coordination framework built around a shared SQLite event queue. Each agent is a separate Claude Code instance. Agents listen for events, react to them, and push new events — forming an asynchronous pipeline where no agent needs to know about any other agent, only about the events.
 
