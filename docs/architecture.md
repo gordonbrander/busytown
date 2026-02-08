@@ -16,10 +16,10 @@ about any other agent — they only know about events.
                          │  claims         │
                          └─────────────────┘
                                ▲     │
-  ┌───────────┐                │     ▼
-  │    FS     │  file.*   ┌───────────┐
-  │  Watcher  │──────────▸│  Agent    │
-  └───────────┘           │  (Claude) │
+                               │     ▼
+                          ┌───────────┐
+                          │  Agent    │
+                          │  (Claude) │
                           └───────────┘
 ```
 
