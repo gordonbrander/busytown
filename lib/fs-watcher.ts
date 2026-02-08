@@ -10,6 +10,7 @@
 
 import { relative, resolve } from "node:path";
 import { globToRegExp } from "@std/path";
+import { debounce } from "@std/async/debounce";
 import { openDb, pushEvent } from "./event-queue.ts";
 import mainLogger from "./main-logger.ts";
 
@@ -83,21 +84,24 @@ export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
     excludes: allExcludes,
   });
 
+  const processEvent = debounce((event: Deno.FsEvent): void => {
+    const eventType = mapEventKind(event.kind);
+    if (eventType == undefined) return;
+
+    for (const absPath of event.paths) {
+      const relPath = relative(projectRoot, absPath);
+      if (shouldExclude(relPath, compiled)) continue;
+      pushEvent(db, "fs", eventType, { path: relPath });
+    }
+  }, 200);
+
   const watcher = Deno.watchFs(watchPaths, { recursive: true });
   try {
     for await (const event of watcher) {
-      const eventType = mapEventKind(event.kind);
-      if (eventType == undefined) continue;
-
-      for (const absPath of event.paths) {
-        const relPath = relative(projectRoot, absPath);
-        if (shouldExclude(relPath, compiled)) {
-          continue;
-        }
-        pushEvent(db, "fs-watcher", eventType, { path: relPath });
-      }
+      processEvent(event);
     }
   } finally {
+    processEvent.clear();
     watcher.close();
     db.close();
   }
