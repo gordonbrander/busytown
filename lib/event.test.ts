@@ -1,10 +1,5 @@
 import { assertEquals } from "@std/assert";
-import {
-  type Event,
-  filterMatchedEvents,
-  type ListenerDef,
-  matchesListen,
-} from "./event.ts";
+import { type Event, type ListenerDef, matchesListen } from "./event.ts";
 
 const mkEvent = (type: string, worker_id = "w1"): Event => ({
   id: 1,
@@ -53,37 +48,4 @@ Deno.test("matchesListen - multiple patterns", () => {
 Deno.test("matchesListen - empty listen array matches nothing", () => {
   const listener = mkListener("agent1", []);
   assertEquals(matchesListen(mkEvent("task.created"), listener), false);
-});
-
-// --- filterMatchedEvents ---
-
-Deno.test("filterMatchedEvents - returns only matching events", () => {
-  const listener = mkListener("agent1", ["task.*"]);
-  const events = [
-    mkEvent("task.created"),
-    mkEvent("file.modified"),
-    mkEvent("task.done"),
-  ];
-  const result = filterMatchedEvents(events, listener);
-  assertEquals(result.length, 2);
-  assertEquals(result[0].type, "task.created");
-  assertEquals(result[1].type, "task.done");
-});
-
-Deno.test("filterMatchedEvents - returns empty array when nothing matches", () => {
-  const listener = mkListener("agent1", ["task.*"]);
-  const events = [mkEvent("file.modified"), mkEvent("other.event")];
-  assertEquals(filterMatchedEvents(events, listener), []);
-});
-
-Deno.test("filterMatchedEvents - wildcard excludes self-events", () => {
-  const listener = mkListener("agent1", ["*"]);
-  const events = [
-    mkEvent("task.created", "agent1"),
-    mkEvent("task.created", "agent2"),
-    mkEvent("file.modified", "agent1"),
-  ];
-  const result = filterMatchedEvents(events, listener);
-  assertEquals(result.length, 1);
-  assertEquals(result[0].worker_id, "agent2");
 });

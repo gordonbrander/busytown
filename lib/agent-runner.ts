@@ -12,14 +12,24 @@
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { filterMatchedEvents } from "./event.ts";
-import { openDb, pollEvents } from "./event-queue.ts";
+import { matchesListen } from "./event.ts";
+import type { DatabaseSync } from "node:sqlite";
+import {
+  getEventsSince,
+  getSince,
+  openDb,
+  pollEvents,
+  pushEvent,
+  updateCursor,
+} from "./event-queue.ts";
 import { runFsWatcher } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
 import { sleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
 
 const logger = mainLogger.child({ component: "agent-runner" });
+
+const POLL_BATCH_SIZE = 100;
 
 export type AgentDef = {
   id: string;
@@ -128,16 +138,12 @@ const textEncoder = new TextEncoder();
 /** Invoke an agent as a headless Claude Code instance. */
 export const runAgent = async (
   agent: AgentDef,
-  events: Event[],
+  event: Event,
   dbPath: string,
   projectRoot: string,
-): Promise<void> => {
-  logger.info("Agent running", {
-    agent: agent.id,
-    events: events.map((e) => e.type),
-  });
+): Promise<number> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath);
-  const userMessage = JSON.stringify(events);
+  const userMessage = JSON.stringify(event);
   const toolArgs = buildToolArgs(agent.allowedTools);
 
   const logsDir = join(projectRoot, "logs");
@@ -177,10 +183,53 @@ export const runAgent = async (
   await Promise.all([stdoutPipe, stderrPipe]);
   logFile.close();
 
-  if (code !== 0) {
-    logger.error("Agent exit", { agent: agent.id, code });
-  } else {
-    logger.info("Agent completed", { agent: agent.id });
+  return code;
+};
+
+/** Process events serially for a single agent, advancing cursor after each. */
+const forkAgent = async (
+  agent: AgentDef,
+  db: DatabaseSync,
+  dbPath: string,
+  projectRoot: string,
+): Promise<boolean> => {
+  try {
+    const since = getSince(db, agent.id);
+    // omitWorkerId excludes the agent's own events (including lifecycle events it
+    // pushed). This prevents self-triggering: the cursor still advances past the
+    // agent's own events, but they are never yielded for matching.
+    const allEvents = getEventsSince(db, {
+      sinceId: since,
+      limit: POLL_BATCH_SIZE,
+      omitWorkerId: agent.id,
+    });
+
+    for (const event of allEvents) {
+      if (matchesListen(event, agent)) {
+        pushEvent(db, agent.id, "agent.start", {
+          event_id: event.id,
+          event_type: event.type,
+        });
+        const exitCode = await runAgent(agent, event, dbPath, projectRoot);
+        if (exitCode === 0) {
+          pushEvent(db, agent.id, "agent.finish", {
+            event_id: event.id,
+            event_type: event.type,
+          });
+        } else {
+          pushEvent(db, agent.id, "agent.error", {
+            event_id: event.id,
+            event_type: event.type,
+            exit_code: exitCode,
+          });
+        }
+      }
+      updateCursor(db, agent.id, event.id);
+    }
+    return true;
+  } catch (err) {
+    logger.error("Agent fork failed", { agent: agent.id, error: err });
+    return false;
   }
 };
 
@@ -203,7 +252,7 @@ export const runPollLoop = async ({
   try {
     while (true) {
       // Emit all new events as NDJSON on stdout
-      const stdoutEvents = pollEvents(db, "_stdout", 100);
+      const stdoutEvents = pollEvents(db, "_stdout", POLL_BATCH_SIZE);
       for (const event of stdoutEvents) {
         console.log(JSON.stringify(event));
       }
@@ -211,19 +260,14 @@ export const runPollLoop = async ({
       // Load agents fresh each time, so we pick up new ones
       const agents = await loadAllAgents(agentsDir, agentFilter);
 
-      for (const agent of agents) {
-        // Poll with per-agent cursor, excluding events from self
-        const allEvents = pollEvents(db, agent.id, 100, agent.id);
-        const matched = filterMatchedEvents(allEvents, agent);
-        if (matched.length === 0) continue;
-
-        logger.info("Event dispatch", {
-          agent: agent.id,
-          events: matched.map((e) => e.type),
-        });
-
-        runAgent(agent, matched, dbPath, projectRoot);
-      }
+      const forks = agents.map((agent) =>
+        forkAgent(agent, db, dbPath, projectRoot)
+      );
+      // Wait until this batch of forks completes.
+      // Agents run in parallel, but each agent fork processes each event sequentially.
+      // Waiting for the parallel forks to settle ensures that each agent's cursor
+      // advances without skipping over any events.
+      await Promise.allSettled(forks);
 
       await sleep(pollIntervalMs);
     }
