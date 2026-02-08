@@ -37,7 +37,10 @@ Deno.test("matchesListen - prefix glob with .*", () => {
 Deno.test("matchesListen - wildcard matches everything except self", () => {
   const listener = mkListener("agent1", ["*"]);
   assertEquals(matchesListen(mkEvent("task.created", "other"), listener), true);
-  assertEquals(matchesListen(mkEvent("task.created", "agent1"), listener), false);
+  assertEquals(
+    matchesListen(mkEvent("task.created", "agent1"), listener),
+    false,
+  );
 });
 
 Deno.test("matchesListen - multiple patterns", () => {

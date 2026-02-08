@@ -16,7 +16,10 @@ Deno.test("shouldExclude - ignores .git subdirectories", () => {
 });
 
 Deno.test("shouldExclude - ignores node_modules", () => {
-  assertEquals(shouldExclude("node_modules/foo/index.js", defaultCompiled), true);
+  assertEquals(
+    shouldExclude("node_modules/foo/index.js", defaultCompiled),
+    true,
+  );
   assertEquals(shouldExclude("src/node_modules/bar.js", defaultCompiled), true);
 });
 
