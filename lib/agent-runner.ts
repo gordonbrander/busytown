@@ -192,38 +192,44 @@ const forkAgent = async (
   db: DatabaseSync,
   dbPath: string,
   projectRoot: string,
-): Promise<void> => {
-  const since = getSince(db, agent.id);
-  // omitWorkerId excludes the agent's own events (including lifecycle events it
-  // pushed). This prevents self-triggering: the cursor still advances past the
-  // agent's own events, but they are never yielded for matching.
-  const allEvents = getEventsSince(db, {
-    sinceId: since,
-    limit: POLL_BATCH_SIZE,
-    omitWorkerId: agent.id,
-  });
+): Promise<boolean> => {
+  try {
+    const since = getSince(db, agent.id);
+    // omitWorkerId excludes the agent's own events (including lifecycle events it
+    // pushed). This prevents self-triggering: the cursor still advances past the
+    // agent's own events, but they are never yielded for matching.
+    const allEvents = getEventsSince(db, {
+      sinceId: since,
+      limit: POLL_BATCH_SIZE,
+      omitWorkerId: agent.id,
+    });
 
-  for (const event of allEvents) {
-    if (matchesListen(event, agent)) {
-      pushEvent(db, agent.id, "agent.start", {
-        event_id: event.id,
-        event_type: event.type,
-      });
-      const exitCode = await runAgent(agent, event, dbPath, projectRoot);
-      if (exitCode === 0) {
-        pushEvent(db, agent.id, "agent.finish", {
+    for (const event of allEvents) {
+      if (matchesListen(event, agent)) {
+        pushEvent(db, agent.id, "agent.start", {
           event_id: event.id,
           event_type: event.type,
         });
-      } else {
-        pushEvent(db, agent.id, "agent.error", {
-          event_id: event.id,
-          event_type: event.type,
-          exit_code: exitCode,
-        });
+        const exitCode = await runAgent(agent, event, dbPath, projectRoot);
+        if (exitCode === 0) {
+          pushEvent(db, agent.id, "agent.finish", {
+            event_id: event.id,
+            event_type: event.type,
+          });
+        } else {
+          pushEvent(db, agent.id, "agent.error", {
+            event_id: event.id,
+            event_type: event.type,
+            exit_code: exitCode,
+          });
+        }
       }
+      updateCursor(db, agent.id, event.id);
     }
-    updateCursor(db, agent.id, event.id);
+    return true;
+  } catch (err) {
+    logger.error("Agent fork failed", { agent: agent.id, error: err });
+    return false;
   }
 };
 
@@ -261,12 +267,7 @@ export const runPollLoop = async ({
       // Agents run in parallel, but each agent fork processes each event sequentially.
       // Waiting for the parallel forks to settle ensures that each agent's cursor
       // advances without skipping over any events.
-      const results = await Promise.allSettled(forks);
-      for (const result of results) {
-        if (result.status === "rejected") {
-          logger.error("Agent fork failed", { error: result.reason });
-        }
-      }
+      await Promise.allSettled(forks);
 
       await sleep(pollIntervalMs);
     }
