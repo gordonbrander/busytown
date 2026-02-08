@@ -1,6 +1,5 @@
 .DS_Store
 node_modules/
-.agent-runner.pid
-.agent-runner.log
-logs/
+*.log
+*.pid
 events.db*
