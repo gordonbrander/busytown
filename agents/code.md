@@ -8,6 +8,7 @@ allowed_tools:
   - "Glob"
   - "Edit"
   - "Write"
+  - "Skill"
   - "Bash(git:*)"
   - "Bash(npm:*)"
   - "Bash(npx:*)"
