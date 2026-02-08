@@ -6,6 +6,7 @@
     "jsr:@cliffy/internal@1.0.0-rc.8": "1.0.0-rc.8",
     "jsr:@cliffy/table@1.0.0-rc.8": "1.0.0-rc.8",
     "jsr:@std/assert@1": "1.0.18",
+    "jsr:@std/async@^1.1.1": "1.1.1",
     "jsr:@std/collections@^1.1.3": "1.1.3",
     "jsr:@std/fmt@~1.0.2": "1.0.8",
     "jsr:@std/front-matter@1": "1.0.9",
@@ -48,6 +49,9 @@
         "jsr:@std/internal"
       ]
     },
+    "@std/async@1.1.1": {
+      "integrity": "8a79beb3378cc229ce65ba2c746cfd03e4855ddd891d1eb6b9e32128e0d5339c"
+    },
     "@std/collections@1.1.3": {
       "integrity": "bf8b0818886df6a32b64c7d3b037a425111f28278d69fd0995aeb62777c986b0"
     },
@@ -87,6 +91,7 @@
     "dependencies": [
       "jsr:@cliffy/command@1.0.0-rc.8",
       "jsr:@std/assert@1",
+      "jsr:@std/async@^1.1.1",
       "jsr:@std/front-matter@^1.0.9",
       "jsr:@std/path@1"
     ]
