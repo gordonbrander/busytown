@@ -64,7 +64,7 @@ export const shouldIgnore = (
 /** Map Deno.FsEvent kind to our event type, or null if we should skip it. */
 const mapEventKind = (
   kind: Deno.FsEvent["kind"],
-): string | null => {
+): string | undefined => {
   switch (kind) {
     case "create":
       return "file.created";
@@ -73,7 +73,7 @@ const mapEventKind = (
     case "remove":
       return "file.deleted";
     default:
-      return null;
+      return undefined;
   }
 };
 
@@ -136,7 +136,7 @@ export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
     const watcher = Deno.watchFs(watchPaths, { recursive: true });
     for await (const event of watcher) {
       const eventType = mapEventKind(event.kind);
-      if (eventType === null) continue;
+      if (eventType == undefined) continue;
 
       for (const absPath of event.paths) {
         const relPath = relative(projectRoot, absPath);
