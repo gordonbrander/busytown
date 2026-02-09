@@ -164,7 +164,7 @@ automatically.
 - **description** — included in the agent's system prompt for self-awareness
 - **listen** — event types to react to (see matching below)
 - **allowed_tools** — Claude Code tools the agent can use. The runner
-  auto-injects `Bash(deno task events:*)` so agents can always push events and
+  auto-injects `Bash(busytown events:*)` so agents can always push events and
   claim work.
 
 ### Listen matching
@@ -241,10 +241,13 @@ the first writer wins. This is atomic at the SQLite level.
 
 ## CLI
 
-### Event queue CLI
+busytown ships a unified CLI installed globally via `deno task install`. This
+creates a `busytown` command usable from any directory.
+
+### Event queue commands
 
 ```bash
-deno task events <command> [--db <path>]
+busytown events <command> [--db <path>]
 ```
 
 | Command       | Description                                                         |
@@ -252,24 +255,25 @@ deno task events <command> [--db <path>]
 | `push`        | Push an event (`--worker`, `--type`, `--payload`)                   |
 | `list`        | Query events (`--since`, `--limit`, `--tail`, `--type`, `--worker`) |
 | `watch`       | Stream new events as NDJSON (`--worker`, `--poll`)                  |
-| `since`       | Get a worker's cursor position (`--worker`)                         |
-| `cursor`      | Set a worker's cursor (`--worker`, `--set`)                         |
+| `cursor`      | Get a worker's cursor position (`--worker`)                         |
+| `set-cursor`  | Set a worker's cursor (`--worker`, `--set`)                         |
 | `claim`       | Claim an event (`--worker`, `--event`)                              |
 | `check-claim` | Check who claimed an event (`--event`)                              |
 
-### Agent runner CLI
+### Agent runner commands
 
 ```bash
-deno task runner <command> [options]
+busytown <command> [options]
 ```
 
-| Command   | Description                 |
-| --------- | --------------------------- |
-| `run`     | Run poll loop in foreground |
-| `start`   | Start as background daemon  |
-| `stop`    | Stop the daemon             |
-| `restart` | Restart the daemon          |
-| `status`  | Check if daemon is running  |
+| Command   | Description                    |
+| --------- | ------------------------------ |
+| `run`     | Run poll loop in foreground    |
+| `start`   | Start as background daemon     |
+| `stop`    | Stop the daemon                |
+| `restart` | Restart the daemon             |
+| `status`  | Check if daemon is running     |
+| `plan`    | Push a plan.request event      |
 
 Options: `--agents-dir`, `--db`, `--poll`, `--agent`, `--agent-cwd`, `--watch`,
 `--exclude`.

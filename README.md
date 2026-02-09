@@ -60,21 +60,29 @@ plans, WIP, etc.
 **Prerequisites:** [Deno](https://deno.land/) and
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed.
 
+### Install
+
+```bash
+# Install the `busytown` command globally
+deno task install
+```
+
+This creates a `busytown` command you can run from any directory.
+
 ### 1. Start the agent runner
 
 ```bash
 # Run in foreground
-deno task runner run
+busytown run
 
 # Or start as a background daemon
-deno task runner start
+busytown start
 ```
 
 ### 2. Push an event
 
 ```bash
-# Or use the shortcut
-deno task plan prds/my-feature.md
+busytown plan prds/my-feature.md
 ```
 
 ### 3. Watch it go
@@ -115,7 +123,7 @@ summary to `summaries/<filename>.md`.
 
 After writing the summary, push an event:
 
-    deno task events push --type summary.created --worker summarizer \
+    busytown events push --type summary.created --worker summarizer \
       --payload '{"path": "summaries/<filename>.md"}'
 ```
 
@@ -133,34 +141,40 @@ injects context about the event queue CLI so agents know how to push events.
 Each agent runs as a headless Claude Code subprocess (`claude --print`),
 sandboxed to only the tools you allow.
 
-## Event queue CLI
+## CLI
 
-The event queue has a full CLI for manual interaction and scripting:
+After installing (`deno task install`), use `busytown` from any directory:
+
+```bash
+busytown <command> [options]
+```
+
+### Event queue commands
 
 ```bash
 # Push an event
-deno task events push --type my.event --worker my-script --payload '{"key":"value"}'
+busytown events push --type my.event --worker my-script --payload '{"key":"value"}'
 
 # Query events
-deno task events list --type plan.* --limit 10 --tail
+busytown events list --type plan.* --limit 10 --tail
 
 # Watch for new events (streams ndjson)
-deno task events watch --worker my-watcher --type file.*
+busytown events watch --worker my-watcher
 
 # Check a worker's cursor position
-deno task events since --worker my-agent
+busytown events cursor --worker my-agent
 
 # Claim an event
-deno task events claim --event-id 42 --worker my-agent
+busytown events claim --event 42 --worker my-agent
 
 # Check who claimed an event
-deno task events check-claim --event-id 42
+busytown events check-claim --event 42
 ```
 
-## Agent runner CLI
+### Agent runner commands
 
 ```bash
-deno task runner <command> [options]
+busytown <command> [options]
 
 # Commands
 run                    # Run poll loop in foreground
@@ -168,11 +182,12 @@ start                  # Start as background daemon
 stop                   # Stop the daemon
 restart                # Restart the daemon
 status                 # Check if daemon is running
+plan <prd-file>        # Push a plan.request event
 
 # Options
 --agents-dir <path>    # Agent definitions directory (default: agents/)
 --db <path>            # Database path (default: events.db)
---poll <ms>            # Poll interval in ms (default: 5000)
+--poll <ms>            # Poll interval in ms (default: 1000)
 --agent <name>         # Run only a specific agent
 --agent-cwd <path>     # Working directory for agents (default: .)
 --watch <paths>        # Paths to watch for FS changes (default: .)
@@ -187,10 +202,10 @@ watches the current directory (`.`).
 
 ```bash
 # Watch specific directories
-deno task runner run --watch src --watch docs
+busytown run --watch src --watch docs
 
 # Exclude patterns (glob syntax)
-deno task runner run --exclude '**/dist/**' --exclude '**/build/**'
+busytown run --exclude '**/dist/**' --exclude '**/build/**'
 ```
 
 Common paths (`.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,

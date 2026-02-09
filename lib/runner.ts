@@ -100,17 +100,17 @@ export const buildSystemPrompt = (
 ## Pushing events
 
 To push events to the queue, run:
-  deno task events push --worker ${agent.id} --db ${dbPath} --type <type> --payload '<json>'
+  busytown events push --worker ${agent.id} --db ${dbPath} --type <type> --payload '<json>'
 
 where <type> is the event type and <json> is an optional JSON payload (defaults to {}).
 
 ## Claiming events
 
 To claim an event (first-claim-wins):
-  deno task events claim --worker ${agent.id} --db ${dbPath} --event <id>
+  busytown events claim --worker ${agent.id} --db ${dbPath} --event <id>
 
 To check who claimed an event:
-  deno task events check-claim --db ${dbPath} --event <id>
+  busytown events check-claim --db ${dbPath} --event <id>
 
 Claim an event before working on it. If the claim response shows claimed:false, another worker already claimed it — move on.
 
@@ -128,7 +128,7 @@ export const buildToolArgs = (
   if (allowedTools.includes("*")) return [];
   const tools = [
     ...allowedTools,
-    "Bash(deno task events:*)",
+    "Bash(busytown events:*)",
   ];
   return ["--allowedTools", tools.join(" ")];
 };
