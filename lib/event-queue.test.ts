@@ -2,9 +2,9 @@ import { assertEquals } from "@std/assert";
 import {
   claimEvent,
   getClaimant,
+  getCursor,
   getEventsSince,
   getOrCreateCursor,
-  getSince,
   openDb,
   pollEvents,
   pushEvent,
@@ -95,18 +95,18 @@ Deno.test("pushEvent - stores event with custom payload", () => {
   db.close();
 });
 
-// --- getSince ---
+// --- getCursor ---
 
-Deno.test("getSince - returns 0 for unknown worker", () => {
+Deno.test("getCursor - returns 0 for unknown worker", () => {
   const db = freshDb();
-  assertEquals(getSince(db, "unknown"), 0);
+  assertEquals(getCursor(db, "unknown"), 0);
   db.close();
 });
 
-Deno.test("getSince - returns stored cursor value", () => {
+Deno.test("getCursor - returns stored cursor value", () => {
   const db = freshDb();
   updateCursor(db, "w1", 42);
-  assertEquals(getSince(db, "w1"), 42);
+  assertEquals(getCursor(db, "w1"), 42);
   db.close();
 });
 
@@ -115,7 +115,7 @@ Deno.test("getSince - returns stored cursor value", () => {
 Deno.test("updateCursor - inserts new cursor", () => {
   const db = freshDb();
   updateCursor(db, "w1", 10);
-  assertEquals(getSince(db, "w1"), 10);
+  assertEquals(getCursor(db, "w1"), 10);
   db.close();
 });
 
@@ -123,7 +123,7 @@ Deno.test("updateCursor - upserts existing cursor", () => {
   const db = freshDb();
   updateCursor(db, "w1", 10);
   updateCursor(db, "w1", 20);
-  assertEquals(getSince(db, "w1"), 20);
+  assertEquals(getCursor(db, "w1"), 20);
   db.close();
 });
 
@@ -267,7 +267,7 @@ Deno.test("pollEvents - returns new events and advances cursor", () => {
 
   const events = pollEvents(db, "reader");
   assertEquals(events.length, 2);
-  assertEquals(getSince(db, "reader"), events[1].id);
+  assertEquals(getCursor(db, "reader"), events[1].id);
   db.close();
 });
 
