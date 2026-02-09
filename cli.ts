@@ -9,7 +9,6 @@
  */
 
 import { Command } from "@cliffy/command";
-import { join } from "node:path";
 import { eventsCommand } from "./scripts/events.ts";
 import {
   daemonCommand,
@@ -21,18 +20,15 @@ import {
 } from "./scripts/runner.ts";
 import { openDb, pushEvent } from "./lib/event-queue.ts";
 
-// import.meta.dirname resolves to the repo root (even via deno install shim)
-const defaultAgentsDir = join(import.meta.dirname!, "agents");
-
 await new Command()
   .name("busytown")
   .description("Multi-agent coordination framework.")
-  .command("run", runCommand(defaultAgentsDir))
-  .command("start", startCommand(defaultAgentsDir))
+  .command("run", runCommand())
+  .command("start", startCommand())
   .command("stop", stopCommand)
-  .command("restart", restartCommand(defaultAgentsDir))
+  .command("restart", restartCommand())
   .command("status", statusCommand)
-  .command("_daemon", daemonCommand(defaultAgentsDir))
+  .command("_daemon", daemonCommand())
   .command("events", eventsCommand)
   .command("plan")
   .description("Push a plan.request event for a PRD file.")

@@ -185,7 +185,7 @@ status                 # Check if daemon is running
 plan <prd-file>        # Push a plan.request event
 
 # Options
---agents-dir <path>    # Agent definitions directory (default: built-in agents/)
+--agents-dir <path>    # Agent definitions directory (default: agents/)
 --db <path>            # Database path (default: events.db)
 --poll <ms>            # Poll interval in ms (default: 1000)
 --agent <name>         # Run only a specific agent
