@@ -124,7 +124,7 @@ export const pushEvent = (
  * @param workerId - Worker ID to look up
  * @returns The last processed event ID, or 0 if no cursor exists
  */
-export const getSince = (db: DatabaseSync, workerId: string): number => {
+export const getCursor = (db: DatabaseSync, workerId: string): number => {
   const stmt = db.prepare(
     "SELECT since FROM worker_cursors WHERE worker_id = ?",
   );
@@ -192,7 +192,7 @@ export const getEventsSince = (
 /**
  * Polls for new events and automatically advances the worker's cursor.
  *
- * Combines {@link getSince}, {@link getEventsSince}, and {@link updateCursor}
+ * Combines {@link getCursor}, {@link getEventsSince}, and {@link updateCursor}
  * into a single operation for convenient event consumption.
  *
  * @param db - Database connection

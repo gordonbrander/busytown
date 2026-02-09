@@ -8,8 +8,8 @@ import { Command } from "@cliffy/command";
 import {
   claimEvent,
   getClaimant,
+  getCursor,
   getEventsSince,
-  getSince,
   openDb,
   pollEvents,
   pushEvent,
@@ -60,18 +60,6 @@ await new Command()
       db.close();
     }
   })
-  .command("since")
-  .description("Get the cursor for a worker.")
-  .option("--worker <id:string>", "Worker ID", { required: true })
-  .action((options) => {
-    const db = openDb(options.db);
-    try {
-      const since = getSince(db, options.worker);
-      console.log(JSON.stringify({ worker_id: options.worker, since }));
-    } finally {
-      db.close();
-    }
-  })
   .command("list")
   .description("Get events after a given id.")
   .option("--since <id:string>", "Event ID to start after")
@@ -104,6 +92,18 @@ await new Command()
     }
   })
   .command("cursor")
+  .description("Get the cursor for a worker.")
+  .option("--worker <id:string>", "Worker ID", { required: true })
+  .action((options) => {
+    const db = openDb(options.db);
+    try {
+      const since = getCursor(db, options.worker);
+      console.log(JSON.stringify({ worker_id: options.worker, since }));
+    } finally {
+      db.close();
+    }
+  })
+  .command("set-cursor")
   .description("Set the cursor for a worker.")
   .option("--worker <id:string>", "Worker ID", { required: true })
   .option("--set <event_id:string>", "Event ID to set cursor to", {

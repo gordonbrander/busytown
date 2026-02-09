@@ -54,18 +54,18 @@ deno task events watch --worker agent-1 --poll 2
 
 ## Other Commands
 
-### since
+### cursor
 
 Get the current cursor position for a worker.
 
 ```
-deno task events since --worker <id>
+deno task events cursor --worker <id>
 ```
 
 **Example:**
 
 ```bash
-deno task events since --worker agent-1
+deno task events cursor --worker agent-1
 # Output: {"worker_id":"agent-1","since":5}
 ```
 
@@ -103,18 +103,18 @@ deno task events list --since 0 --type task.created
 deno task events list --tail 5
 ```
 
-### cursor
+### set-cursor
 
 Manually set the cursor position for a worker.
 
 ```
-deno task events cursor --worker <id> --set <event_id>
+deno task events set-cursor --worker <id> --set <event_id>
 ```
 
 **Example:**
 
 ```bash
-deno task events cursor --worker agent-1 --set 10
+deno task events set-cursor --worker agent-1 --set 10
 # Output: {"worker_id":"agent-1","since":10}
 ```
 
@@ -186,5 +186,5 @@ deno task events list --since 0
 **Reset a worker's cursor to replay events:**
 
 ```bash
-deno task events cursor --worker agent-1 --set 0
+deno task events set-cursor --worker agent-1 --set 0
 ```
