@@ -17,7 +17,7 @@ import {
 } from "../lib/event-queue.ts";
 import { sleep } from "../lib/utils.ts";
 
-await new Command()
+export const eventsCommand = new Command()
   .name("events")
   .description("CLI wrapper for the event queue.")
   .globalOption("--db <path:string>", "Database path", { default: "events.db" })
@@ -165,4 +165,6 @@ await new Command()
       db.close();
     }
   })
-  .parse(Deno.args);
+if (import.meta.main) {
+  await eventsCommand.parse(Deno.args);
+}

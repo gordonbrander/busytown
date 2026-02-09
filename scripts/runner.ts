@@ -88,8 +88,15 @@ async function killProcessTree(pid: number): Promise<void> {
 
 // --- Runner option helpers ---
 
-// deno-lint-ignore no-explicit-any
-type RunnerOptions = Record<string, any>;
+interface RunnerOptions {
+  agentsDir: string;
+  db: string;
+  poll: number;
+  agent?: string;
+  agentCwd?: string;
+  watch: string[];
+  exclude?: string[];
+}
 
 /** Convert parsed runner options back to CLI args for forwarding to _daemon. */
 function serializeRunnerArgs(options: RunnerOptions): string[] {
@@ -108,6 +115,37 @@ function serializeRunnerArgs(options: RunnerOptions): string[] {
   return args;
 }
 
+/** Create a new Command with the shared runner options pre-applied. */
+function commandWithRunnerOptions(
+  description: string,
+  defaultAgentsDir: string,
+) {
+  return new Command()
+    .description(description)
+    .option(
+      "--agents-dir <path:file>",
+      "Directory containing agent .md files",
+      { default: defaultAgentsDir },
+    )
+    .option("--db <path:file>", "Database path", { default: "events.db" })
+    .option("--poll <ms:number>", "Poll interval in ms", {
+      default: 1000,
+    })
+    .option("--agent <name:string>", "Only run a specific agent")
+    .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
+      default: ".",
+    })
+    .option(
+      "--watch <paths:file[]>",
+      "Paths to watch for FS changes",
+      { default: ["."] as string[] },
+    )
+    .option(
+      "--exclude <patterns:string[]>",
+      "Comma-separated exclude patterns (exact or glob)",
+    );
+}
+
 // --- Core daemon functions ---
 
 async function startDaemon(options: RunnerOptions): Promise<void> {
@@ -117,13 +155,14 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
     Deno.exit(1);
   }
 
-  // Build the shell command that execs into deno running _daemon
+  // Re-invoke the same entrypoint (works for both direct `deno run` and the installed shim)
+  const entrypoint = new URL(Deno.mainModule).pathname;
   const denoArgs = [
     "run",
     "--allow-read",
     "--allow-write",
     "--allow-run",
-    "scripts/runner.ts",
+    entrypoint,
     "_daemon",
   ];
   const runnerArgs = serializeRunnerArgs(options);
@@ -157,33 +196,13 @@ async function stopDaemon(): Promise<void> {
   logger.info("Daemon stopped");
 }
 
-// --- Command definitions ---
+// --- Exported command factories ---
 
-const runCmd = new Command()
-  .description("Start the agent poll loop (foreground).")
-  .option(
-    "--agents-dir <path:file>",
-    "Directory containing agent .md files",
-    { default: "agents/" },
-  )
-  .option("--db <path:file>", "Database path", { default: "events.db" })
-  .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 1000,
-  })
-  .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
-    default: ".",
-  })
-  .option(
-    "--watch <paths:file[]>",
-    "Paths to watch for FS changes",
-    { default: ["."] as string[] },
-  )
-  .option(
-    "--exclude <patterns:string[]>",
-    "Comma-separated exclude patterns (exact or glob)",
-  )
-  .action(async (options) => {
+export function runCommand(defaultAgentsDir = "agents/") {
+  return commandWithRunnerOptions(
+    "Start the agent poll loop (foreground).",
+    defaultAgentsDir,
+  ).action(async (options) => {
     await runLoop({
       agentsDir: options.agentsDir,
       agentCwd: options.agentCwd ?? Deno.cwd(),
@@ -194,73 +213,36 @@ const runCmd = new Command()
       excludePaths: options.exclude ?? [],
     });
   });
+}
 
-const startCmd = new Command()
-  .description("Start the agent runner as a background daemon.")
-  .option(
-    "--agents-dir <path:file>",
-    "Directory containing agent .md files",
-    { default: "agents/" },
-  )
-  .option("--db <path:file>", "Database path", { default: "events.db" })
-  .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 1000,
-  })
-  .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
-    default: ".",
-  })
-  .option(
-    "--watch <paths:file[]>",
-    "Paths to watch for FS changes",
-    { default: ["."] as string[] },
-  )
-  .option(
-    "--exclude <patterns:string[]>",
-    "Comma-separated exclude patterns (exact or glob)",
-  )
-  .action(async (options) => {
-    await startDaemon(options);
+export function startCommand(defaultAgentsDir = "agents/") {
+  return commandWithRunnerOptions(
+    "Start the agent runner as a background daemon.",
+    defaultAgentsDir,
+  ).action(async (options) => {
+    await startDaemon(options as RunnerOptions);
   });
+}
 
-const stopCmd = new Command()
+export const stopCommand = new Command()
   .description("Stop the background daemon.")
   .action(async () => {
     await stopDaemon();
   });
 
-const restartCmd = new Command()
-  .description("Restart the background daemon.")
-  .option(
-    "--agents-dir <path:file>",
-    "Directory containing agent .md files",
-    { default: "agents/" },
-  )
-  .option("--db <path:file>", "Database path", { default: "events.db" })
-  .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 1000,
-  })
-  .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
-    default: ".",
-  })
-  .option(
-    "--watch <paths:file[]>",
-    "Paths to watch for FS changes",
-    { default: ["."] as string[] },
-  )
-  .option(
-    "--exclude <patterns:string[]>",
-    "Comma-separated exclude patterns (exact or glob)",
-  )
-  .action(async (options) => {
+export function restartCommand(defaultAgentsDir = "agents/") {
+  return commandWithRunnerOptions(
+    "Restart the background daemon.",
+    defaultAgentsDir,
+  ).action(async (options) => {
     await stopDaemon();
     // Brief pause to let process fully exit
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    await startDaemon(options);
+    await startDaemon(options as RunnerOptions);
   });
+}
 
-const statusCmd = new Command()
+export const statusCommand = new Command()
   .description("Check if the daemon is running.")
   .action(async () => {
     const pid = await getRunningPid();
@@ -271,32 +253,11 @@ const statusCmd = new Command()
     }
   });
 
-const daemonCmd = new Command()
-  .description("Internal daemon loop (do not call directly).")
-  .hidden()
-  .option(
-    "--agents-dir <path:file>",
-    "Directory containing agent .md files",
-    { default: "agents/" },
-  )
-  .option("--db <path:file>", "Database path", { default: "events.db" })
-  .option("--poll <ms:number>", "Poll interval in ms", {
-    default: 1000,
-  })
-  .option("--agent <name:string>", "Only run a specific agent")
-  .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
-    default: ".",
-  })
-  .option(
-    "--watch <paths:file[]>",
-    "Paths to watch for FS changes",
-    { default: ["."] as string[] },
-  )
-  .option(
-    "--exclude <patterns:string[]>",
-    "Comma-separated exclude patterns (exact or glob)",
-  )
-  .action(async (options) => {
+export function daemonCommand(defaultAgentsDir = "agents/") {
+  return commandWithRunnerOptions(
+    "Internal daemon loop (do not call directly).",
+    defaultAgentsDir,
+  ).hidden().action(async (options) => {
     // Auto-restart loop
     while (true) {
       logger.info("Daemon starting");
@@ -317,16 +278,23 @@ const daemonCmd = new Command()
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   });
+}
 
-// --- Top-level assembly ---
+/** Assemble the runner CLI with all subcommands. */
+export function runnerCommand(defaultAgentsDir = "agents/") {
+  return new Command()
+    .name("runner")
+    .description("Agent runner with daemon management.")
+    .command("run", runCommand(defaultAgentsDir))
+    .command("start", startCommand(defaultAgentsDir))
+    .command("stop", stopCommand)
+    .command("restart", restartCommand(defaultAgentsDir))
+    .command("status", statusCommand)
+    .command("_daemon", daemonCommand(defaultAgentsDir));
+}
 
-await new Command()
-  .name("runner")
-  .description("Agent runner with daemon management.")
-  .command("run", runCmd)
-  .command("start", startCmd)
-  .command("stop", stopCmd)
-  .command("restart", restartCmd)
-  .command("status", statusCmd)
-  .command("_daemon", daemonCmd)
-  .parse(Deno.args);
+// --- Direct execution ---
+
+if (import.meta.main) {
+  await runnerCommand().parse(Deno.args);
+}
