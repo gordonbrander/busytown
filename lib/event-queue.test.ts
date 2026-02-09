@@ -2,9 +2,9 @@ import { assertEquals } from "@std/assert";
 import {
   claimEvent,
   getClaimant,
+  getCursor,
   getEventsSince,
   getOrCreateCursor,
-  getCursor,
   openDb,
   pollEvents,
   pushEvent,
