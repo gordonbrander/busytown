@@ -6,7 +6,7 @@ import {
   getEventsSince,
   getOrCreateCursor,
   openDb,
-  pollEventLog,
+  pollEvents,
   pushEvent,
   updateCursor,
 } from "./event-queue.ts";
@@ -265,7 +265,7 @@ Deno.test("pollEventLog - returns new events and advances cursor", () => {
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
-  const events = pollEventLog(db, "reader");
+  const events = pollEvents(db, "reader");
   assertEquals(events.length, 2);
   assertEquals(getCursor(db, "reader"), events[1].id);
   db.close();
@@ -277,10 +277,10 @@ Deno.test("pollEventLog - second poll returns only new events", () => {
   pushEvent(db, "w1", "a");
   pushEvent(db, "w1", "b");
 
-  pollEventLog(db, "reader");
+  pollEvents(db, "reader");
   pushEvent(db, "w1", "c");
 
-  const events = pollEventLog(db, "reader");
+  const events = pollEvents(db, "reader");
   assertEquals(events.length, 1);
   assertEquals(events[0].type, "c");
   db.close();
@@ -289,9 +289,9 @@ Deno.test("pollEventLog - second poll returns only new events", () => {
 Deno.test("pollEventLog - returns empty array and does not advance cursor when no new events", () => {
   const db = freshDb();
   pushEvent(db, "w1", "a");
-  pollEventLog(db, "reader");
+  pollEvents(db, "reader");
 
-  const events = pollEventLog(db, "reader");
+  const events = pollEvents(db, "reader");
   assertEquals(events.length, 0);
   db.close();
 });
@@ -302,7 +302,7 @@ Deno.test("pollEventLog - omitWorkerId excludes self-events", () => {
   pushEvent(db, "w1", "own-event");
   pushEvent(db, "w2", "other-event");
 
-  const events = pollEventLog(db, "w1", 100, "w1");
+  const events = pollEvents(db, "w1", 100, "w1");
   assertEquals(events.length, 1);
   assertEquals(events[0].type, "other-event");
   db.close();
@@ -315,7 +315,7 @@ Deno.test("pollEventLog - respects limit", () => {
   pushEvent(db, "w1", "b");
   pushEvent(db, "w1", "c");
 
-  const events = pollEventLog(db, "reader", 2);
+  const events = pollEvents(db, "reader", 2);
   assertEquals(events.length, 2);
   db.close();
 });

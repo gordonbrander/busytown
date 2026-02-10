@@ -219,7 +219,7 @@ export const getEventsSince = (
  * @param omitWorkerId - Optional worker ID to exclude from results
  * @returns Array of new events; cursor is advanced to the last event's ID
  */
-export const pollEventLog = (
+export const pollEvents = (
   db: DatabaseSync,
   workerId: string,
   limit = 100,

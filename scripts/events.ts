@@ -11,7 +11,7 @@ import {
   getCursor,
   getEventsSince,
   openDb,
-  pollEventLog,
+  pollEvents,
   pushEvent,
   updateCursor,
 } from "../lib/event-queue.ts";
@@ -35,7 +35,7 @@ export const eventsCommand = new Command()
       const encoder = new TextEncoder();
       const write = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
       while (true) {
-        const events = pollEventLog(db, options.worker, 100, options.omitWorker);
+        const events = pollEvents(db, options.worker, 100, options.omitWorker);
         for (const event of events) {
           write(JSON.stringify(event) + "\n");
         }
