@@ -22,7 +22,7 @@ Deno.test("eventMatches - prefix glob with .*", () => {
   assertEquals(eventMatches(mkEvent("file.modified"), ["task.*"]), false);
 });
 
-Deno.test("matchesListen - wildcard matches everything", () => {
+Deno.test("eventMatches - wildcard matches everything", () => {
   assertEquals(eventMatches(mkEvent("task.created", "other"), ["*"]), true);
   assertEquals(
     eventMatches(mkEvent("task.created", "agent1"), ["*"]),
@@ -30,7 +30,7 @@ Deno.test("matchesListen - wildcard matches everything", () => {
   );
 });
 
-Deno.test("matchesListen - multiple patterns", () => {
+Deno.test("eventMatches - multiple patterns", () => {
   assertEquals(
     eventMatches(mkEvent("task.created"), ["task.created", "file.*"]),
     true,
@@ -45,6 +45,6 @@ Deno.test("matchesListen - multiple patterns", () => {
   );
 });
 
-Deno.test("matchesListen - empty listen array matches nothing", () => {
+Deno.test("eventMatches - empty listen array matches nothing", () => {
   assertEquals(eventMatches(mkEvent("task.created"), []), false);
 });
