@@ -1,8 +1,8 @@
 /**
  * Core event types and matching utilities.
- *
  * @module event
  */
+import { z } from "zod/v4";
 
 /**
  * A parsed event with deserialized payload.
@@ -13,24 +13,30 @@
  * @property worker_id - ID of the worker that pushed this event
  * @property payload - Deserialized JSON payload data
  */
-export type Event = {
-  id: number;
-  timestamp: number;
-  type: string;
-  worker_id: string;
-  payload: unknown;
-};
+export const EventSchema = z.object({
+  id: z.number().int(),
+  timestamp: z.number().int(),
+  type: z.string(),
+  worker_id: z.string(),
+  payload: z.unknown(),
+});
+
+export type Event = z.infer<typeof EventSchema>;
 
 /**
  * Raw database row before JSON payload deserialization.
  */
-export type RawEventRow = Omit<Event, "payload"> & { payload: string };
+export const RawEventRowSchema = EventSchema.extend({ payload: z.string() });
+
+export type RawEventRow = z.infer<typeof RawEventRowSchema>;
 
 /** Minimal shape needed for event matching (satisfied by AgentDef). */
-export type ListenerDef = {
-  id: string;
-  listen: string[];
-};
+export const ListenerDefSchema = z.object({
+  id: z.string(),
+  listen: z.array(z.string()),
+});
+
+export type ListenerDef = z.infer<typeof ListenerDefSchema>;
 
 /** Check if an event matches a listener's listen patterns. */
 export const matchesListen = (

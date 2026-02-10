@@ -11,11 +11,32 @@
  * @module event-queue
  */
 
+import { z } from "zod/v4";
 import { DatabaseSync } from "node:sqlite";
 import type { Event, RawEventRow } from "./event.ts";
 import mainLogger from "./main-logger.ts";
 
 const logger = mainLogger.child({ component: "event-queue" });
+
+// Local Zod schemas for ad-hoc row shapes returned by SQL queries
+const InsertReturningRowSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+});
+
+const CursorRowSchema = z.object({ since: z.number() });
+
+const ClaimWorkerRowSchema = z.object({ worker_id: z.string() });
+
+const ClaimDetailRowSchema = z.object({
+  worker_id: z.string(),
+  claimed_at: z.number(),
+});
+
+type InsertReturningRow = z.infer<typeof InsertReturningRowSchema>;
+type CursorRow = z.infer<typeof CursorRowSchema>;
+type ClaimWorkerRow = z.infer<typeof ClaimWorkerRowSchema>;
+type ClaimDetailRow = z.infer<typeof ClaimDetailRowSchema>;
 
 /**
  * Opens a SQLite database and initializes all schemas.
@@ -100,10 +121,7 @@ export const pushEvent = (
     workerId,
     type,
     JSON.stringify(payload),
-  ) as {
-    id: number;
-    timestamp: number;
-  };
+  ) as InsertReturningRow;
 
   const event = {
     id,
@@ -128,7 +146,7 @@ export const getCursor = (db: DatabaseSync, workerId: string): number => {
   const stmt = db.prepare(
     "SELECT since FROM worker_cursors WHERE worker_id = ?",
   );
-  const row = stmt.get(workerId) as { since: number } | undefined;
+  const row = stmt.get(workerId) as CursorRow | undefined;
   return row?.since ?? 0;
 };
 
@@ -255,7 +273,7 @@ export const getOrCreateCursor = (
   return transaction(db, () => {
     const existing = db.prepare(
       "SELECT since FROM worker_cursors WHERE worker_id = ?",
-    ).get(workerId) as { since: number } | undefined;
+    ).get(workerId) as CursorRow | undefined;
     if (existing) return existing.since;
     const event = pushEvent(db, "runner", "cursor.create", {
       agent_id: workerId,
@@ -288,7 +306,7 @@ export const claimEvent = (
     );
     insert.run(eventId, workerId);
     const check = db.prepare("SELECT worker_id FROM claims WHERE event_id = ?");
-    const row = check.get(eventId) as { worker_id: string } | undefined;
+    const row = check.get(eventId) as ClaimWorkerRow | undefined;
     if (row && row.worker_id === workerId) {
       pushEvent(db, workerId, "claim.created", { event_id: eventId });
       return true;
@@ -307,11 +325,9 @@ export const claimEvent = (
 export const getClaimant = (
   db: DatabaseSync,
   eventId: number,
-): { worker_id: string; claimed_at: number } | undefined => {
+): ClaimDetailRow | undefined => {
   const stmt = db.prepare(
     "SELECT worker_id, claimed_at FROM claims WHERE event_id = ?",
   );
-  return stmt.get(eventId) as
-    | { worker_id: string; claimed_at: number }
-    | undefined;
+  return stmt.get(eventId) as ClaimDetailRow | undefined;
 };
