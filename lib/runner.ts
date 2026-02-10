@@ -11,6 +11,7 @@
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
+import { scheduler } from "node:timers/promises";
 import type { Event } from "./event.ts";
 import { eventMatches } from "./event.ts";
 import type { DatabaseSync } from "node:sqlite";
@@ -282,11 +283,12 @@ export type EventPoller = {
   stop: () => Promise<void>;
 };
 
-export const eventPoller = ({
+export const eventPoller = async ({
   db,
   workerId,
   pollIntervalMs,
   limit,
+  abortSignal,
   callback,
 }: {
   db: DatabaseSync;
@@ -294,68 +296,72 @@ export const eventPoller = ({
   pollIntervalMs: number;
   limit: number;
   callback: (event: Event) => Awaitable<void>;
-}): EventPoller => {
+  abortSignal: AbortSignal;
+}): Promise<void> => {
   const pollLogger = logger.child({
     subcomponent: "poller",
     worker: workerId,
     limit,
     pollIntervalMs,
   });
+
   let shouldRun = true;
-
-  const stop = (): Promise<void> => {
+  abortSignal.addEventListener("abort", () => {
+    // Stop polling if aborted
     shouldRun = false;
-    return Promise.resolve();
-  };
+  });
 
-  const run = async () => {
-    pollLogger.debug("Start polling");
-    while (shouldRun) {
-      pollLogger.debug("Poll");
-      const since = getOrCreateCursor(db, workerId);
-      const events = getEventsSince(db, {
-        sinceId: since,
-        // Don't want to see our own events
-        omitWorkerId: workerId,
-        limit,
-      });
+  pollLogger.debug("Start polling");
 
-      // No events? Wait for polling interval, then loop again and check.
-      if (events.length === 0) {
-        pollLogger.debug("Sleeping");
-        await sleep(pollIntervalMs);
-        continue;
-      }
+  while (shouldRun) {
+    pollLogger.debug("Poll");
+    const since = getOrCreateCursor(db, workerId);
+    const events = getEventsSince(db, {
+      sinceId: since,
+      // Don't want to see our own events
+      omitWorkerId: workerId,
+      limit,
+    });
 
-      // Process events as fast as we can
-      for (const event of events) {
-        pollLogger.debug("Processing event");
-        try {
-          await callback(event);
-        } catch (err) {
-          pollLogger.error("Error processing event", {
-            error: `${err}`,
-          });
-        }
-        // Update cursor even on failure
-        updateCursor(db, workerId, event.id);
-      }
+    // No events? Wait for polling interval, then loop again and check.
+    if (events.length === 0) {
+      pollLogger.debug("Sleeping");
+      await sleep(pollIntervalMs);
+      continue;
     }
-  };
 
-  return { run, stop };
+    // Process events as fast as we can
+    for (const event of events) {
+      pollLogger.debug("Processing event");
+      try {
+        await callback(event);
+      } catch (err) {
+        pollLogger.error("Error processing event", {
+          error: `${err}`,
+        });
+      }
+      // Update cursor even on failure
+      updateCursor(db, workerId, event.id);
+    }
+
+    // This can be a hot loop. Yield to the main thread periodically
+    // so we don't starve other tasks.
+    await scheduler.yield();
+  }
 };
 
 /** Independent polling loop for the stdout event log. */
 const pollEventLogger = (
   db: DatabaseSync,
   pollIntervalMs: number,
-): EventPoller => {
+  abortSignal: AbortSignal,
+): Promise<void> => {
   return eventPoller({
     db,
     workerId: "_stdout",
     pollIntervalMs,
     limit: POLL_BATCH_SIZE,
+    abortSignal,
     callback: (event) => {
       console.log(JSON.stringify(event));
     },
@@ -369,18 +375,21 @@ const pollAgent = ({
   dbPath,
   projectRoot,
   pollIntervalMs,
+  abortSignal,
 }: {
   db: DatabaseSync;
   agent: AgentDef;
   dbPath: string;
   projectRoot: string;
   pollIntervalMs: number;
-}): EventPoller => {
+  abortSignal: AbortSignal;
+}): Promise<void> => {
   return eventPoller({
     db,
     workerId: agent.id,
     pollIntervalMs,
     limit: POLL_BATCH_SIZE,
+    abortSignal,
     callback: async (event) => {
       if (eventMatches(event, agent.listen)) {
         pushEvent(db, agent.id, "agent.start", {
@@ -425,20 +434,21 @@ export const runMain = async (
   const db = openDb(dbPath);
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
+  const abortController = new AbortController();
+  const abortSignal = abortController.signal;
 
   try {
-    const eventLoggerPoller = pollEventLogger(db, pollIntervalMs);
-    const eventLoggerPromise = eventLoggerPoller.run();
+    const eventLoggerPromise = pollEventLogger(db, pollIntervalMs, abortSignal);
 
     const agentPromises = agents.map((agent) => {
-      const agentPoller = pollAgent({
+      return pollAgent({
         db,
         agent,
         dbPath,
         projectRoot,
         pollIntervalMs,
+        abortSignal,
       });
-      return agentPoller.run();
     });
 
     const fsWatcherPromise = runFsWatcher({
@@ -446,6 +456,7 @@ export const runMain = async (
       watchPaths,
       excludePaths,
       agentCwd,
+      abortSignal,
     });
 
     await Promise.all([
@@ -454,6 +465,7 @@ export const runMain = async (
       fsWatcherPromise,
     ]);
   } finally {
+    abortController.abort();
     db.close();
   }
 };

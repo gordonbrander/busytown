@@ -22,6 +22,7 @@ export type FsWatcherConfig = {
   watchPaths: string[];
   excludePaths: string[];
   agentCwd: string;
+  abortSignal: AbortSignal;
 };
 
 export const DEFAULT_EXCLUDES = [
@@ -95,6 +96,12 @@ export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
   }, 200);
 
   const watcher = Deno.watchFs(watchPaths, { recursive: true });
+
+  config.abortSignal.addEventListener("abort", () => {
+    watcher.close();
+    processEvent.clear();
+  });
+
   try {
     for await (const event of watcher) {
       processEvent(event);
