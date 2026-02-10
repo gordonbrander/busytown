@@ -84,7 +84,6 @@ export type RunnerConfig = {
   agentsDir: string;
   dbPath: string;
   pollIntervalMs: number;
-  agentFilter?: string;
   agentCwd: string;
   watchPaths: string[];
   excludePaths: string[];
@@ -121,16 +120,14 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   }
 };
 
-/** Load all agent definitions from a directory, optionally filtering to one. */
+/** Load all agent definitions from a directory. */
 export const loadAllAgents = async (
   agentsDir: string,
-  agentFilter?: string,
 ): Promise<AgentDef[]> => {
   const agents: AgentDef[] = [];
   try {
     for await (const entry of Deno.readDir(agentsDir)) {
       if (!entry.isFile || !entry.name.endsWith(".md")) continue;
-      if (agentFilter && basename(entry.name, ".md") !== agentFilter) continue;
       agents.push(await loadAgentDef(join(agentsDir, entry.name)));
     }
   } catch (err) {
@@ -328,7 +325,6 @@ const forkAgent = async (
 export const runPollLoop = async ({
   agentsDir,
   agentCwd,
-  agentFilter,
   dbPath,
   pollIntervalMs,
 }: RunnerConfig) => {
@@ -349,7 +345,7 @@ export const runPollLoop = async ({
       }
 
       // Load agents fresh each time, so we pick up new ones
-      const agents = await loadAllAgents(agentsDir, agentFilter);
+      const agents = await loadAllAgents(agentsDir);
 
       const forks = agents.map((agent) =>
         forkAgent(agent, db, dbPath, projectRoot)

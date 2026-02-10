@@ -275,7 +275,7 @@ busytown <command> [options]
 | `status`  | Check if daemon is running  |
 | `plan`    | Push a plan.request event   |
 
-Options: `--agents-dir`, `--db`, `--poll`, `--agent`, `--agent-cwd`, `--watch`,
+Options: `--agents-dir`, `--db`, `--poll`, `--agent-cwd`, `--watch`,
 `--exclude`.
 
 ## Design principles
