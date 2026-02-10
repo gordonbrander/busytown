@@ -256,9 +256,9 @@ Deno.test("getEventsSince - events are ordered by id ascending", () => {
   db.close();
 });
 
-// --- pollEventLog ---
+// --- pollEvents ---
 
-Deno.test("pollEventLog - returns new events and advances cursor", () => {
+Deno.test("pollEvents - returns new events and advances cursor", () => {
   const db = freshDb();
   // Pre-set cursor so the worker sees events pushed after it
   updateCursor(db, "reader", 0);
@@ -271,7 +271,7 @@ Deno.test("pollEventLog - returns new events and advances cursor", () => {
   db.close();
 });
 
-Deno.test("pollEventLog - second poll returns only new events", () => {
+Deno.test("pollEvents - second poll returns only new events", () => {
   const db = freshDb();
   updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");
@@ -286,7 +286,7 @@ Deno.test("pollEventLog - second poll returns only new events", () => {
   db.close();
 });
 
-Deno.test("pollEventLog - returns empty array and does not advance cursor when no new events", () => {
+Deno.test("pollEvents - returns empty array and does not advance cursor when no new events", () => {
   const db = freshDb();
   pushEvent(db, "w1", "a");
   pollEvents(db, "reader");
@@ -296,7 +296,7 @@ Deno.test("pollEventLog - returns empty array and does not advance cursor when n
   db.close();
 });
 
-Deno.test("pollEventLog - omitWorkerId excludes self-events", () => {
+Deno.test("pollEvents - omitWorkerId excludes self-events", () => {
   const db = freshDb();
   updateCursor(db, "w1", 0);
   pushEvent(db, "w1", "own-event");
@@ -308,7 +308,7 @@ Deno.test("pollEventLog - omitWorkerId excludes self-events", () => {
   db.close();
 });
 
-Deno.test("pollEventLog - respects limit", () => {
+Deno.test("pollEvents - respects limit", () => {
   const db = freshDb();
   updateCursor(db, "reader", 0);
   pushEvent(db, "w1", "a");

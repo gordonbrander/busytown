@@ -82,7 +82,7 @@ with its auto-generated ID and timestamp.
 **getEventsSince(db, options)** — Queries events after a given ID. Supports
 filtering by worker, type, and tail mode.
 
-**pollEventLog(db, workerId, limit, omitWorkerId)** — Convenience: gets the
+**pollEvents(db, workerId, limit, omitWorkerId)** — Convenience: gets the
 worker's cursor, fetches new events, advances the cursor. This is the primary
 read path.
 
@@ -117,7 +117,7 @@ tasks:
 At startup, the runner loads all agent definitions and launches independent
 concurrent loops via `Promise.all`:
 
-- **`pollEventLog`** — polls the `_stdout` cursor and emits new events as NDJSON
+- **`pollEvents`** — polls the `_stdout` cursor and emits new events as NDJSON
   to stdout (for external consumers)
 - **`pollAgent`** (one per agent) — polls events, matches against the agent's
   `listen` patterns, and invokes the agent subprocess
