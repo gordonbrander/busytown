@@ -6,6 +6,7 @@
 
 import { Command } from "@cliffy/command";
 import { runLoop } from "../lib/runner.ts";
+import { shellEscape } from "../lib/shell.ts";
 import mainLogger from "../lib/main-logger.ts";
 
 const logger = mainLogger.child({ component: "daemon" });
@@ -17,10 +18,6 @@ const LOG_FILE = ".daemon-stderr.log";
 
 // --- Utility functions ---
 
-/** Single-quote escape a string for safe shell inclusion. */
-function shellEscape(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
-}
 
 async function readPid(): Promise<number | null> {
   try {

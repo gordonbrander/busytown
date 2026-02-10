@@ -26,6 +26,7 @@ import { runFsWatcher } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
 import { sleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
+import { renderTemplate } from "./template.ts";
 
 const logger = mainLogger.child({ component: "runner" });
 
@@ -33,6 +34,7 @@ const POLL_BATCH_SIZE = 100;
 
 export type AgentDef = {
   id: string;
+  type: "claude" | "shell";
   description: string;
   listen: string[];
   allowedTools: string[];
@@ -58,11 +60,13 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
     body: string;
   };
   const id = basename(filePath, ".md");
+  const type = ((attrs.type as string) ?? "claude") as AgentDef["type"];
   const description = (attrs.description as string) ?? "";
   const listen = (attrs.listen as string[]) ?? ["*"];
   const allowedTools = (attrs.allowed_tools as string[] | undefined) ?? [];
   return {
     id,
+    type,
     description,
     listen,
     allowedTools,
@@ -186,6 +190,43 @@ export const runAgent = async (
   return code;
 };
 
+/** Invoke a shell agent by rendering its template and running via sh -c. */
+export const runShellAgent = async (
+  agent: AgentDef,
+  event: Event,
+  projectRoot: string,
+): Promise<number> => {
+  const context = { event };
+  const command = renderTemplate(agent.systemPrompt, context);
+
+  const logsDir = join(projectRoot, "logs");
+  await Deno.mkdir(logsDir, { recursive: true });
+  const logPath = join(logsDir, `${agent.id}.log`);
+  const logFile = await Deno.open(logPath, {
+    write: true,
+    create: true,
+    append: true,
+  });
+
+  const cmd = new Deno.Command("sh", {
+    args: ["-c", command],
+    cwd: projectRoot,
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const process = cmd.spawn();
+
+  const stdoutPipe = pipeStreamToFile(process.stdout, logFile);
+  const stderrPipe = pipeStreamToFile(process.stderr, logFile);
+
+  const { code } = await process.status;
+  await Promise.all([stdoutPipe, stderrPipe]);
+  logFile.close();
+
+  return code;
+};
+
 /** Process events serially for a single agent, advancing cursor after each. */
 const forkAgent = async (
   agent: AgentDef,
@@ -210,7 +251,9 @@ const forkAgent = async (
           event_id: event.id,
           event_type: event.type,
         });
-        const exitCode = await runAgent(agent, event, dbPath, projectRoot);
+        const exitCode = agent.type === "shell"
+          ? await runShellAgent(agent, event, projectRoot)
+          : await runAgent(agent, event, dbPath, projectRoot);
         if (exitCode === 0) {
           pushEvent(db, agent.id, "agent.finish", {
             event_id: event.id,
