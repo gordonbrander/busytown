@@ -8,18 +8,16 @@
  *
  * @module runner
  */
-
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { matchesListen } from "./event.ts";
+import { eventMatches } from "./event.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   getEventsSince,
   getOrCreateCursor,
   openDb,
-  pollEvents,
   pushEvent,
   updateCursor,
 } from "./event-queue.ts";
@@ -121,21 +119,26 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
 };
 
 /** Load all agent definitions from a directory. */
-export const loadAllAgents = async (
+export async function* loadAllAgents(
   agentsDir: string,
-): Promise<AgentDef[]> => {
-  const agents: AgentDef[] = [];
+): AsyncGenerator<AgentDef> {
   try {
     for await (const entry of Deno.readDir(agentsDir)) {
       if (!entry.isFile || !entry.name.endsWith(".md")) continue;
-      agents.push(await loadAgentDef(join(agentsDir, entry.name)));
+      try {
+        yield await loadAgentDef(join(agentsDir, entry.name));
+      } catch (err) {
+        logger.error("Failed to load agent", { file: entry.name, error: err });
+      }
     }
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) return agents;
+    if (err instanceof Deno.errors.NotFound) {
+      logger.warn("Agents directory not found", { agentsDir });
+      return;
+    }
     throw err;
   }
-  return agents;
-};
+}
 
 /** Build the full system prompt for an agent invocation. */
 export const buildSystemPrompt = (
@@ -272,26 +275,114 @@ export const runShellAgent = async (
   return code;
 };
 
-/** Process events serially for a single agent, advancing cursor after each. */
-const forkAgent = async (
-  agent: AgentDef,
-  db: DatabaseSync,
-  dbPath: string,
-  projectRoot: string,
-): Promise<boolean> => {
-  try {
-    const since = getOrCreateCursor(db, agent.id);
-    // omitWorkerId excludes the agent's own events (including lifecycle events it
-    // pushed). This prevents self-triggering: the cursor still advances past the
-    // agent's own events, but they are never yielded for matching.
-    const allEvents = getEventsSince(db, {
-      sinceId: since,
-      limit: POLL_BATCH_SIZE,
-      omitWorkerId: agent.id,
-    });
+export type Awaitable<T> = Promise<T> | T;
 
-    for (const event of allEvents) {
-      if (matchesListen(event, agent)) {
+export type EventPoller = {
+  run: () => Promise<void>;
+  stop: () => Promise<void>;
+};
+
+export const eventPoller = ({
+  db,
+  workerId,
+  pollIntervalMs,
+  limit,
+  callback,
+}: {
+  db: DatabaseSync;
+  workerId: string;
+  pollIntervalMs: number;
+  limit: number;
+  callback: (event: Event) => Awaitable<void>;
+}): EventPoller => {
+  const pollLogger = logger.child({
+    subcomponent: "poller",
+    worker: workerId,
+    limit,
+    pollIntervalMs,
+  });
+  let shouldRun = true;
+
+  const stop = (): Promise<void> => {
+    shouldRun = false;
+    return Promise.resolve();
+  };
+
+  const run = async () => {
+    pollLogger.debug("Start polling");
+    while (shouldRun) {
+      pollLogger.debug("Poll");
+      const since = getOrCreateCursor(db, workerId);
+      const events = getEventsSince(db, {
+        sinceId: since,
+        // Don't want to see our own events
+        omitWorkerId: workerId,
+        limit,
+      });
+
+      // No events? Wait for polling interval, then loop again and check.
+      if (events.length === 0) {
+        pollLogger.debug("Sleeping");
+        await sleep(pollIntervalMs);
+        continue;
+      }
+
+      // Process events as fast as we can
+      for (const event of events) {
+        pollLogger.debug("Processing event");
+        try {
+          await callback(event);
+        } catch (err) {
+          pollLogger.error("Error processing event", {
+            error: `${err}`,
+          });
+        }
+        // Update cursor even on failure
+        updateCursor(db, workerId, event.id);
+      }
+    }
+  };
+
+  return { run, stop };
+};
+
+/** Independent polling loop for the stdout event log. */
+const pollEventLogger = (
+  db: DatabaseSync,
+  pollIntervalMs: number,
+): EventPoller => {
+  return eventPoller({
+    db,
+    workerId: "_stdout",
+    pollIntervalMs,
+    limit: POLL_BATCH_SIZE,
+    callback: (event) => {
+      console.log(JSON.stringify(event));
+    },
+  });
+};
+
+/** Independent polling loop for a single agent. */
+const pollAgent = ({
+  db,
+  agent,
+  dbPath,
+  projectRoot,
+  pollIntervalMs,
+}: {
+  db: DatabaseSync;
+  agent: AgentDef;
+  dbPath: string;
+  projectRoot: string;
+  pollIntervalMs: number;
+}): EventPoller => {
+  return eventPoller({
+    db,
+    workerId: agent.id,
+    pollIntervalMs,
+    limit: POLL_BATCH_SIZE,
+    callback: async (event) => {
+      if (eventMatches(event, agent.listen)) {
         pushEvent(db, agent.id, "agent.start", {
           event_id: event.id,
           event_type: event.type,
@@ -312,67 +403,57 @@ const forkAgent = async (
           });
         }
       }
-      updateCursor(db, agent.id, event.id);
-    }
-    return true;
-  } catch (err) {
-    logger.error("Agent fork failed", { agent: agent.id, error: err });
-    return false;
-  }
-};
-
-/** Poll loop: loads agents, polls events, dispatches to matching agents. */
-export const runPollLoop = async ({
-  agentsDir,
-  agentCwd,
-  dbPath,
-  pollIntervalMs,
-}: RunnerConfig) => {
-  logger.info("Poll loop start", {
-    db: dbPath,
-    interval_ms: pollIntervalMs,
+    },
   });
-
-  const db = openDb(dbPath);
-  const projectRoot = resolve(agentCwd ?? Deno.cwd());
-
-  try {
-    while (true) {
-      // Emit all new events as NDJSON on stdout
-      const stdoutEvents = pollEvents(db, "_stdout", POLL_BATCH_SIZE);
-      for (const event of stdoutEvents) {
-        console.log(JSON.stringify(event));
-      }
-
-      // Load agents fresh each time, so we pick up new ones
-      const agents = await loadAllAgents(agentsDir);
-
-      const forks = agents.map((agent) =>
-        forkAgent(agent, db, dbPath, projectRoot)
-      );
-      // Wait until this batch of forks completes.
-      // Agents run in parallel, but each agent fork processes each event sequentially.
-      // Waiting for the parallel forks to settle ensures that each agent's cursor
-      // advances without skipping over any events.
-      await Promise.allSettled(forks);
-
-      await sleep(pollIntervalMs);
-    }
-  } finally {
-    db.close();
-  }
 };
 
 /** Main poll loop: loads agents, polls events, dispatches to matching agents. */
-export const runLoop = async (config: RunnerConfig): Promise<void> => {
-  const agentLoopPromise = runPollLoop(config);
-
-  const watcherPromise = runFsWatcher({
-    watchPaths: config.watchPaths,
-    excludePaths: config.excludePaths,
-    dbPath: config.dbPath,
-    agentCwd: config.agentCwd,
+export const runMain = async (
+  {
+    dbPath,
+    agentCwd,
+    agentsDir,
+    pollIntervalMs,
+    watchPaths,
+    excludePaths,
+  }: RunnerConfig,
+): Promise<void> => {
+  logger.info("Starting", {
+    db: dbPath,
+    interval_ms: pollIntervalMs,
   });
+  const db = openDb(dbPath);
+  const projectRoot = resolve(agentCwd ?? Deno.cwd());
+  const agents = await Array.fromAsync(loadAllAgents(agentsDir));
 
-  await Promise.all([agentLoopPromise, watcherPromise]);
+  try {
+    const eventLoggerPoller = pollEventLogger(db, pollIntervalMs);
+    const eventLoggerPromise = eventLoggerPoller.run();
+
+    const agentPromises = agents.map((agent) => {
+      const agentPoller = pollAgent({
+        db,
+        agent,
+        dbPath,
+        projectRoot,
+        pollIntervalMs,
+      });
+      return agentPoller.run();
+    });
+
+    const fsWatcherPromise = runFsWatcher({
+      db,
+      watchPaths,
+      excludePaths,
+      agentCwd,
+    });
+
+    await Promise.all([
+      eventLoggerPromise,
+      ...agentPromises,
+      fsWatcherPromise,
+    ]);
+  } finally {
+    db.close();
+  }
 };

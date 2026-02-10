@@ -82,7 +82,7 @@ with its auto-generated ID and timestamp.
 **getEventsSince(db, options)** — Queries events after a given ID. Supports
 filtering by worker, type, and tail mode.
 
-**pollEvents(db, workerId, limit, omitWorkerId)** — Convenience: gets the
+**pollEventLog(db, workerId, limit, omitWorkerId)** — Convenience: gets the
 worker's cursor, fetches new events, advances the cursor. This is the primary
 read path.
 
@@ -112,21 +112,22 @@ tasks:
 1. **Poll loop** — loads agents, polls events, dispatches matches
 2. **FS watcher** — monitors the filesystem and pushes `file.*` events
 
-### Poll loop
+### Independent polling loops
 
-Each iteration:
+At startup, the runner loads all agent definitions and launches independent
+concurrent loops via `Promise.all`:
 
-1. Poll the `_stdout` worker and emit new events as NDJSON to stdout (for
-   external consumers)
-2. Load all agent definitions fresh from disk (so new agents are picked up
-   without restart)
-3. Fork each agent in parallel — each fork processes its events serially
-4. Wait for all forks to settle via `Promise.allSettled`
-5. Sleep for `pollIntervalMs` (default: 1000ms)
+- **`pollEventLog`** — polls the `_stdout` cursor and emits new events as
+  NDJSON to stdout (for external consumers)
+- **`pollAgent`** (one per agent) — polls events, matches against the agent's
+  `listen` patterns, and invokes the agent subprocess
 
-### Event dispatch (forkAgent)
+Each loop runs independently. A slow agent no longer blocks stdout or other
+agents.
 
-For each agent, each iteration:
+### Event dispatch (pollAgent)
+
+Each agent's loop:
 
 1. Get or create the agent's cursor
 2. Fetch up to 100 events after the cursor, excluding the agent's own events
@@ -135,9 +136,11 @@ For each agent, each iteration:
 4. If it matches: push `agent.start`, spawn a Claude Code instance, then push
    `agent.finish` or `agent.error`
 5. Advance the cursor past every event (matched or not)
+6. If any events were processed, immediately re-poll (mailbox drain); otherwise
+   sleep for `pollIntervalMs`
 
-Agents within a fork process events serially. Different agents run their forks
-in parallel.
+Events within a single agent are processed serially. Different agents run their
+loops concurrently.
 
 ## Agents
 

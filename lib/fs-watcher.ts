@@ -11,15 +11,16 @@
 import { relative, resolve } from "node:path";
 import { globToRegExp } from "@std/path";
 import { debounce } from "@std/async/debounce";
-import { openDb, pushEvent } from "./event-queue.ts";
+import { pushEvent } from "./event-queue.ts";
 import mainLogger from "./main-logger.ts";
+import { DatabaseSync } from "node:sqlite";
 
 const logger = mainLogger.child({ component: "fs-watcher" });
 
 export type FsWatcherConfig = {
+  db: DatabaseSync;
   watchPaths: string[];
   excludePaths: string[];
-  dbPath: string;
   agentCwd: string;
 };
 
@@ -67,11 +68,9 @@ const mapEventKind = (
  * and pushes events to the queue. Runs indefinitely.
  */
 export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
+  const db = config.db;
   const projectRoot = resolve(config.agentCwd ?? Deno.cwd());
-  const dbPath = resolve(config.dbPath);
   const watchPaths = config.watchPaths.map((p) => resolve(projectRoot, p));
-
-  const db = openDb(dbPath);
 
   const allExcludes = [
     ...DEFAULT_EXCLUDES,
@@ -103,6 +102,5 @@ export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
   } finally {
     processEvent.clear();
     watcher.close();
-    db.close();
   }
 };
