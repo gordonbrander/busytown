@@ -117,8 +117,8 @@ tasks:
 At startup, the runner loads all agent definitions and launches independent
 concurrent loops via `Promise.all`:
 
-- **`pollEventLog`** — polls the `_stdout` cursor and emits new events as
-  NDJSON to stdout (for external consumers)
+- **`pollEventLog`** — polls the `_stdout` cursor and emits new events as NDJSON
+  to stdout (for external consumers)
 - **`pollAgent`** (one per agent) — polls events, matches against the agent's
   `listen` patterns, and invokes the agent subprocess
 
