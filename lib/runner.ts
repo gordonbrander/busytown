@@ -24,7 +24,7 @@ import {
 } from "./event-queue.ts";
 import { runFsWatcher } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
-import { sleep } from "./utils.ts";
+import { abortableSleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
 import { renderTemplate } from "./template.ts";
 
@@ -326,7 +326,7 @@ export const eventPoller = async ({
     // No events? Wait for polling interval, then loop again and check.
     if (events.length === 0) {
       pollLogger.debug("Sleeping");
-      await sleep(pollIntervalMs);
+      await abortableSleep(pollIntervalMs, abortSignal);
       continue;
     }
 
@@ -459,7 +459,7 @@ export const runMain = async (
       abortSignal,
     });
 
-    await Promise.all([
+    await Promise.allSettled([
       eventLoggerPromise,
       ...agentPromises,
       fsWatcherPromise,
