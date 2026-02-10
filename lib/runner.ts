@@ -44,6 +44,8 @@ const AgentFrontmatterSchema = z.object({
   description: z.string().default(""),
   listen: z.array(z.string()).default([]),
   allowed_tools: z.array(z.string()).default([]),
+  model: z.string().optional(),
+  effort: z.enum(["low", "medium", "high"]).optional(),
 });
 
 export type AgentFrontmatter = z.infer<typeof AgentFrontmatterSchema>;
@@ -55,6 +57,8 @@ export const ClaudeAgentDefSchema = z.object({
   listen: z.array(z.string()).default([]),
   allowedTools: z.array(z.string()).default([]),
   body: z.string().default("").describe("The agent system prompt"),
+  model: z.string().optional(),
+  effort: z.enum(["low", "medium", "high"]).optional(),
 });
 
 export type ClaudeAgentDef = z.infer<typeof ClaudeAgentDefSchema>;
@@ -100,6 +104,8 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
         listen: frontmatter.listen,
         allowedTools: frontmatter.allowed_tools,
         body: body.trim(),
+        model: frontmatter.model,
+        effort: frontmatter.effort,
       };
     case "shell":
       return {
@@ -208,6 +214,8 @@ export const runClaudeAgent = async (
       "--output-format",
       "stream-json",
       ...toolArgs,
+      ...(agent.model ? ["--model", agent.model] : []),
+      ...(agent.effort ? ["--effort", agent.effort] : []),
     ],
     cwd: projectRoot,
     stdin: "piped",
