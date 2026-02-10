@@ -227,7 +227,6 @@ plan <prd-file>        # Push a plan.request event
 --agents-dir <path>    # Agent definitions directory (default: agents/)
 --db <path>            # Database path (default: events.db)
 --poll <ms>            # Poll interval in ms (default: 1000)
---agent <name>         # Run only a specific agent
 --agent-cwd <path>     # Working directory for agents (default: .)
 --watch <paths>        # Paths to watch for FS changes (default: .)
 --exclude <patterns>   # Glob patterns to exclude from watching

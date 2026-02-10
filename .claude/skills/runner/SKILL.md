@@ -50,7 +50,6 @@ deno task runner <command> [options]
 | `--agents-dir <path>` | Directory containing agent `.md` files (default: `agents/`) |
 | `--db <path>`         | SQLite database path (default: `events.db`)                 |
 | `--poll <seconds>`    | Poll interval in seconds (default: `5`)                     |
-| `--agent <name>`      | Only run a specific agent (by filename without `.md`)       |
 | `--agent-cwd <path>`  | Working directory for sub-agents (default: `.`)             |
 | `--help`              | Show help message                                           |
 

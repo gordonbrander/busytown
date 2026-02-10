@@ -88,7 +88,6 @@ interface RunnerOptions {
   agentsDir: string;
   db: string;
   poll: number;
-  agent?: string;
   agentCwd?: string;
   watch: string[];
   exclude?: string[];
@@ -100,7 +99,6 @@ function serializeRunnerArgs(options: RunnerOptions): string[] {
   if (options.agentsDir) args.push("--agents-dir", options.agentsDir);
   if (options.db) args.push("--db", options.db);
   if (options.poll != null) args.push("--poll", String(options.poll));
-  if (options.agent) args.push("--agent", options.agent);
   if (options.agentCwd) args.push("--agent-cwd", options.agentCwd);
   if (options.watch) {
     for (const w of options.watch) args.push("--watch", w);
@@ -127,7 +125,6 @@ function commandWithRunnerOptions(
     .option("--poll <ms:number>", "Poll interval in ms", {
       default: 1000,
     })
-    .option("--agent <name:string>", "Only run a specific agent")
     .option("--agent-cwd <path:file>", "Working directory for sub-agents", {
       default: ".",
     })
@@ -202,7 +199,6 @@ export function runCommand(defaultAgentsDir = "agents/") {
     await runLoop({
       agentsDir: options.agentsDir,
       agentCwd: options.agentCwd ?? Deno.cwd(),
-      agentFilter: options.agent,
       dbPath: options.db,
       pollIntervalMs: options.poll,
       watchPaths: options.watch,
@@ -261,7 +257,6 @@ export function daemonCommand(defaultAgentsDir = "agents/") {
         await runLoop({
           agentsDir: options.agentsDir,
           agentCwd: options.agentCwd ?? Deno.cwd(),
-          agentFilter: options.agent,
           dbPath: options.db,
           pollIntervalMs: options.poll,
           watchPaths: options.watch,
