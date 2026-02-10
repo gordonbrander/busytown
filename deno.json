@@ -4,7 +4,8 @@
     "runner": "deno run --allow-read --allow-write --allow-run scripts/runner.ts",
     "plan": "bash scripts/plan-request.sh",
     "test": "deno test --allow-read --allow-write",
-    "install": "deno install -g --config deno.json --allow-read --allow-write --allow-run -n busytown cli.ts"
+    "install": "deno install -g --config deno.json --allow-read --allow-write --allow-run -n busytown cli.ts",
+    "compile": "deno compile --allow-read --allow-write --allow-run --output busytown cli.ts"
   },
   "imports": {
     "@cliffy/command": "jsr:@cliffy/command@1.0.0-rc.8",
