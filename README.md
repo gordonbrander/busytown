@@ -127,6 +127,12 @@ After writing the summary, push an event:
       --payload '{"path": "summaries/<filename>.md"}'
 ```
 
+Each agent runs as a headless Claude Code subprocess (`claude --print`),
+sandboxed to only the tools you allow.
+
+The agent's markdown body becomes its system prompt. The runner automatically
+injects context about the event queue CLI so agents know how to push events.
+
 **Fields:**
 
 - `type` — Agent type (default `claude`)
@@ -135,12 +141,10 @@ After writing the summary, push an event:
   prefix glob (`file.*`), or wildcard (`*`)
 - `allowed_tools` — Claude Code tools the agent can use (e.g. `Read`, `Write`,
   `Edit`, `Grep`, `Glob`, `Bash(git:*)`). Only applies to `claude` agents.
-
-The agent's markdown body becomes its system prompt. The runner automatically
-injects context about the event queue CLI so agents know how to push events.
-
-Each agent runs as a headless Claude Code subprocess (`claude --print`),
-sandboxed to only the tools you allow.
+- `model` — Claude model to use (e.g. `haiku`, `sonnet`, `opus`, or a full model
+  ID). Optional; defaults to whatever model the user has configured globally.
+- `effort` — Thinking effort level: `low`, `medium`, or `high`. Optional;
+  defaults to the CLI default.
 
 ### Shell agents
 
