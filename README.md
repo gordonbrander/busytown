@@ -145,10 +145,10 @@ sandboxed to only the tools you allow.
 ### Shell agents
 
 For lightweight tasks that don't need an LLM — formatting, linting, running
-scripts — use `type: shell` instead. The text body becomes a shell script
-(run via `sh -c`) with Mustache-style template placeholders. The body can be a
-single command or a full multi-line script — variables, conditionals, loops,
-pipes, and heredocs all work:
+scripts — use `type: shell` instead. The text body becomes a shell script (run
+via `sh -c`) with Mustache-style template placeholders. The body can be a single
+command or a full multi-line script — variables, conditionals, loops, pipes, and
+heredocs all work:
 
 ```markdown
 ---
@@ -156,10 +156,9 @@ type: shell
 listen:
   - "file.created"
 ---
-path={{event.payload.path}}
-echo "Processing $path"
-deno fmt "$path"
-busytown events push --type file.formatted --worker formatter
+
+path={{event.payload.path}} echo "Processing $path"
+deno fmt "$path" busytown events push --type file.formatted --worker formatter
 ```
 
 **Template syntax:**

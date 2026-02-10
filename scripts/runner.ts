@@ -18,7 +18,6 @@ const LOG_FILE = ".daemon-stderr.log";
 
 // --- Utility functions ---
 
-
 async function readPid(): Promise<number | null> {
   try {
     const text = await Deno.readTextFile(PID_FILE);

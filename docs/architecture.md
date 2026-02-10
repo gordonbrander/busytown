@@ -266,14 +266,14 @@ busytown events <command> [--db <path>]
 busytown <command> [options]
 ```
 
-| Command   | Description                    |
-| --------- | ------------------------------ |
-| `run`     | Run poll loop in foreground    |
-| `start`   | Start as background daemon     |
-| `stop`    | Stop the daemon                |
-| `restart` | Restart the daemon             |
-| `status`  | Check if daemon is running     |
-| `plan`    | Push a plan.request event      |
+| Command   | Description                 |
+| --------- | --------------------------- |
+| `run`     | Run poll loop in foreground |
+| `start`   | Start as background daemon  |
+| `stop`    | Stop the daemon             |
+| `restart` | Restart the daemon          |
+| `status`  | Check if daemon is running  |
+| `plan`    | Push a plan.request event   |
 
 Options: `--agents-dir`, `--db`, `--poll`, `--agent`, `--agent-cwd`, `--watch`,
 `--exclude`.

@@ -164,7 +164,7 @@ export const eventsCommand = new Command()
     } finally {
       db.close();
     }
-  })
+  });
 if (import.meta.main) {
   await eventsCommand.parse(Deno.args);
 }
