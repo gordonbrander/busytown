@@ -9,6 +9,7 @@
  * @module runner
  */
 
+import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
@@ -32,15 +33,48 @@ const logger = mainLogger.child({ component: "runner" });
 
 const POLL_BATCH_SIZE = 100;
 
-export type AgentDef = {
-  id: string;
-  type: "claude" | "shell";
-  description: string;
-  listen: string[];
-  allowedTools: string[];
-  systemPrompt: string;
-  filePath: string;
-};
+/**
+ * Validates YAML frontmatter attributes from agent markdown files.
+ * Currently describes the union of all properties for all agent types.
+ * Later, we disambiguate this into a discriminated union when constructing the
+ * agent def.
+ */
+const AgentFrontmatterSchema = z.object({
+  type: z.enum(["claude", "shell"]).default("claude"),
+  description: z.string().default(""),
+  listen: z.array(z.string()).default([]),
+  allowed_tools: z.array(z.string()).default([]),
+});
+
+export type AgentFrontmatter = z.infer<typeof AgentFrontmatterSchema>;
+
+export const ClaudeAgentDefSchema = z.object({
+  id: z.string(),
+  type: z.literal("claude"),
+  description: z.string().default(""),
+  listen: z.array(z.string()).default([]),
+  allowedTools: z.array(z.string()).default([]),
+  body: z.string().default("").describe("The agent system prompt"),
+});
+
+export type ClaudeAgentDef = z.infer<typeof ClaudeAgentDefSchema>;
+
+export const ShellAgentDefSchema = z.object({
+  id: z.string(),
+  type: z.literal("shell"),
+  description: z.string().default(""),
+  listen: z.array(z.string()).default([]),
+  body: z.string().describe("The script to run"),
+});
+
+export type ShellAgentDef = z.infer<typeof ShellAgentDefSchema>;
+
+export const AgentDefSchema = z.union([
+  ClaudeAgentDefSchema,
+  ShellAgentDefSchema,
+]);
+
+export type AgentDef = z.infer<typeof AgentDefSchema>;
 
 export type RunnerConfig = {
   agentsDir: string;
@@ -55,24 +89,30 @@ export type RunnerConfig = {
 /** Load a single agent definition from a markdown file with YAML frontmatter. */
 export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const raw = await Deno.readTextFile(filePath);
-  const { attrs, body } = extractYaml(raw) as {
-    attrs: Record<string, unknown>;
-    body: string;
-  };
-  const id = basename(filePath, ".md");
-  const type = ((attrs.type as string) ?? "claude") as AgentDef["type"];
-  const description = (attrs.description as string) ?? "";
-  const listen = (attrs.listen as string[]) ?? ["*"];
-  const allowedTools = (attrs.allowed_tools as string[] | undefined) ?? [];
-  return {
-    id,
-    type,
-    description,
-    listen,
-    allowedTools,
-    systemPrompt: body.trim(),
-    filePath,
-  };
+  const { attrs, body } = extractYaml(raw);
+  const frontmatter = AgentFrontmatterSchema.parse(attrs);
+  switch (frontmatter.type) {
+    case "claude":
+      return {
+        id: basename(filePath, ".md"),
+        type: "claude",
+        description: frontmatter.description,
+        listen: frontmatter.listen,
+        allowedTools: frontmatter.allowed_tools,
+        body: body.trim(),
+      };
+    case "shell":
+      return {
+        id: basename(filePath, ".md"),
+        type: frontmatter.type,
+        description: frontmatter.description,
+        listen: frontmatter.listen,
+        body,
+      };
+    default:
+      // Never should happen
+      throw new Error(`Unsupported agent type: ${frontmatter.type}`);
+  }
 };
 
 /** Load all agent definitions from a directory, optionally filtering to one. */
@@ -96,10 +136,10 @@ export const loadAllAgents = async (
 
 /** Build the full system prompt for an agent invocation. */
 export const buildSystemPrompt = (
-  agent: AgentDef,
+  agent: ClaudeAgentDef,
   dbPath: string,
 ): string => {
-  const header = `You are the "${agent.id}" agent. ${agent.description}
+  return `You are the "${agent.id}" agent. ${agent.description}
 
 ## Pushing events
 
@@ -120,8 +160,8 @@ Claim an event before working on it. If the claim response shows claimed:false, 
 
 ---
 
+${agent.body}
 `;
-  return header + agent.systemPrompt;
 };
 
 /** Build --allowedTools CLI args. Auto-injects events Bash permissions. */
@@ -140,8 +180,8 @@ export const buildToolArgs = (
 const textEncoder = new TextEncoder();
 
 /** Invoke an agent as a headless Claude Code instance. */
-export const runAgent = async (
-  agent: AgentDef,
+export const runClaudeAgent = async (
+  agent: ClaudeAgentDef,
   event: Event,
   dbPath: string,
   projectRoot: string,
@@ -192,12 +232,12 @@ export const runAgent = async (
 
 /** Invoke a shell agent by rendering its template and running via sh -c. */
 export const runShellAgent = async (
-  agent: AgentDef,
+  agent: ShellAgentDef,
   event: Event,
   projectRoot: string,
 ): Promise<number> => {
   const context = { event };
-  const command = renderTemplate(agent.systemPrompt, context);
+  const command = renderTemplate(agent.body, context);
 
   const logsDir = join(projectRoot, "logs");
   await Deno.mkdir(logsDir, { recursive: true });
@@ -253,7 +293,7 @@ const forkAgent = async (
         });
         const exitCode = agent.type === "shell"
           ? await runShellAgent(agent, event, projectRoot)
-          : await runAgent(agent, event, dbPath, projectRoot);
+          : await runClaudeAgent(agent, event, dbPath, projectRoot);
         if (exitCode === 0) {
           pushEvent(db, agent.id, "agent.finish", {
             event_id: event.id,
