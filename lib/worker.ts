@@ -1,7 +1,7 @@
 import { scheduler } from "node:timers/promises";
 import { type DatabaseSync } from "node:sqlite";
 import {
-  getEventsSince,
+  getNextEvent,
   getOrCreateCursor,
   updateCursor,
 } from "./event-queue.ts";
@@ -14,9 +14,23 @@ export type Worker = {
   next: (event: Event) => Promise<void>;
 };
 
+/** Create a worker. */
+export const worker = (
+  id: string,
+  next: (event: Event) => Promise<void>,
+): Worker => ({
+  id,
+  next,
+});
+
+type WorkerTask = {
+  worker: Worker;
+  promise: Promise<void>;
+};
+
 export type WorkerSystem = {
   spawn: (worker: Worker) => void;
-  kill: (id: string) => boolean;
+  kill: (id: string) => Promise<boolean>;
 };
 
 const systemLogger = mainLogger.child({ subcomponent: "worker-system" });
@@ -28,31 +42,32 @@ export const createWorkerSystem = ({
   db: DatabaseSync;
   timeout: number;
 }): WorkerSystem => {
-  const workers = new Map<string, Worker>();
+  const tasks = new Map<string, WorkerTask>();
 
-  /** Spawn worker. Starts worker immediately */
+  /** Spawn worker. Starts worker immediately. */
   const spawn = (worker: Worker): void => {
-    if (workers.has(worker.id)) {
+    if (tasks.has(worker.id)) {
       systemLogger.error(`Worker already exists`, { workerId: worker.id });
       throw new Error(`Worker already exists: ${worker.id}`);
     }
-    workers.set(worker.id, worker);
-    fork(worker.id);
+    const task: WorkerTask = { worker, promise: Promise.resolve() };
+    tasks.set(worker.id, task);
+    task.promise = fork(worker.id);
   };
 
-  /** Kill worker */
-  const kill = (id: string): boolean => {
-    const worker = workers.get(id);
-    if (!worker) {
+  /** Kill worker. Awaits in-flight work before resolving. */
+  const kill = async (id: string): Promise<boolean> => {
+    const task = tasks.get(id);
+    if (!task) {
       systemLogger.debug(`Can't kill worker. Worker does not exist.`, {
         workerId: id,
       });
       return false;
     }
-    workers.delete(id);
-    systemLogger.debug(`Killed worker`, {
-      workerId: id,
-    });
+    // Signal the loop to stop, then wait for in-flight work to finish
+    tasks.delete(id);
+    await task.promise;
+    systemLogger.debug(`Killed worker`, { workerId: id });
     return true;
   };
 
@@ -71,14 +86,15 @@ export const createWorkerSystem = ({
   const fork = async (id: string): Promise<void> => {
     while (true) {
       // Hot load worker
-      const worker = workers.get(id);
+      const task = tasks.get(id);
       // If worker has been removed, nothing to do.
-      if (!worker) return;
+      if (!task) return;
+      const { worker } = task;
 
       const sinceId = getOrCreateCursor(db, worker.id);
 
       // Get next event
-      const event = getEventsSince(db, { sinceId, limit: 1 }).at(0);
+      const event = getNextEvent(db, sinceId);
 
       // If no event, sleep and try again later.
       if (!event) {
@@ -86,8 +102,10 @@ export const createWorkerSystem = ({
         continue;
       }
 
+      // Perform work
       await next(worker, event);
 
+      // Advance cursor whether or not the work was successful
       updateCursor(db, worker.id, event.id);
 
       // This could be a hot loop, so yield to the scheduler to prevent
