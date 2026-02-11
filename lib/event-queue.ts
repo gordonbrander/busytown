@@ -308,6 +308,8 @@ export const getOrCreateCursor = (
  * Uses INSERT OR IGNORE with the PRIMARY KEY constraint to ensure only the
  * first worker to claim an event succeeds. Emits a `claim.created` event on success.
  *
+ * Idempotent.
+ *
  * @param db - Database connection
  * @param workerId - Worker ID attempting the claim
  * @param eventId - Event ID to claim
@@ -319,6 +321,17 @@ export const claimEvent = (
   eventId: number,
 ): boolean => {
   logger.info("Claiming event", { eventId, workerId });
+
+  // Check if event is already claimed
+  const existing = db.prepare(
+    "SELECT worker_id FROM claims WHERE event_id = ?",
+  ).get(eventId) as ClaimWorkerRow | undefined;
+
+  if (existing) {
+    // If there is an existing claim, and it is us, then we have the claim
+    return existing.worker_id === workerId;
+  }
+
   return transaction(db, () => {
     const insert = db.prepare(
       "INSERT OR IGNORE INTO claims (event_id, worker_id) VALUES (?, ?)",
