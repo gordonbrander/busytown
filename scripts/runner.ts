@@ -5,7 +5,7 @@
  */
 
 import { Command } from "@cliffy/command";
-import { runLoop } from "../lib/runner.ts";
+import { runMain } from "../lib/runner.ts";
 import { shellEscape } from "../lib/shell.ts";
 import mainLogger from "../lib/main-logger.ts";
 
@@ -196,7 +196,7 @@ export function runCommand(defaultAgentsDir = "agents/") {
     "Start the agent poll loop (foreground).",
     defaultAgentsDir,
   ).action(async (options) => {
-    await runLoop({
+    await runMain({
       agentsDir: options.agentsDir,
       agentCwd: options.agentCwd ?? Deno.cwd(),
       dbPath: options.db,
@@ -254,7 +254,7 @@ export function daemonCommand(defaultAgentsDir = "agents/") {
     while (true) {
       logger.info("Daemon starting");
       try {
-        await runLoop({
+        await runMain({
           agentsDir: options.agentsDir,
           agentCwd: options.agentCwd ?? Deno.cwd(),
           dbPath: options.db,

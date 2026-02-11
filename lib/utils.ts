@@ -7,3 +7,6 @@ export const die = (msg: string): never => {
   console.error(msg);
   Deno.exit(1);
 };
+
+/** Never resolves */
+export const forever = () => new Promise<void>(() => {});

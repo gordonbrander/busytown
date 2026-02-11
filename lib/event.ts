@@ -30,23 +30,15 @@ export const RawEventRowSchema = EventSchema.extend({ payload: z.string() });
 
 export type RawEventRow = z.infer<typeof RawEventRowSchema>;
 
-/** Minimal shape needed for event matching (satisfied by AgentDef). */
-export const ListenerDefSchema = z.object({
-  id: z.string(),
-  listen: z.array(z.string()),
-});
-
-export type ListenerDef = z.infer<typeof ListenerDefSchema>;
-
 /** Check if an event matches a listener's listen patterns. */
-export const matchesListen = (
+export const eventMatches = (
   event: Event,
-  listener: ListenerDef,
+  listen: string[],
 ): boolean => {
-  for (const pattern of listener.listen) {
+  for (const pattern of listen) {
     if (pattern === "*") {
-      // Wildcard matches everything except events from self
-      if (event.worker_id !== listener.id) return true;
+      // Wildcard matches everything
+      return true;
     } else if (pattern.endsWith(".*")) {
       // Prefix glob: "task.*" matches "task.created", "task.done", etc.
       const prefix = pattern.slice(0, -1);

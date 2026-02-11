@@ -4,6 +4,7 @@ import {
   getClaimant,
   getCursor,
   getEventsSince,
+  getNextEvent,
   getOrCreateCursor,
   openDb,
   pollEvents,
@@ -253,6 +254,43 @@ Deno.test("getEventsSince - events are ordered by id ascending", () => {
   const events = getEventsSince(db);
   assertEquals(events[0].id < events[1].id, true);
   assertEquals(events[1].id < events[2].id, true);
+  db.close();
+});
+
+// --- getNextEvent ---
+
+Deno.test("getNextEvent - returns undefined when no events", () => {
+  const db = freshDb();
+  assertEquals(getNextEvent(db, 0), undefined);
+  db.close();
+});
+
+Deno.test("getNextEvent - returns the first event after sinceId", () => {
+  const db = freshDb();
+  pushEvent(db, "w1", "a");
+  pushEvent(db, "w1", "b");
+  pushEvent(db, "w1", "c");
+
+  const event = getNextEvent(db, 1);
+  assertEquals(event?.type, "b");
+  assertEquals(event?.id, 2);
+  db.close();
+});
+
+Deno.test("getNextEvent - returns undefined when no events after sinceId", () => {
+  const db = freshDb();
+  pushEvent(db, "w1", "a");
+
+  assertEquals(getNextEvent(db, 1), undefined);
+  db.close();
+});
+
+Deno.test("getNextEvent - deserializes payload", () => {
+  const db = freshDb();
+  pushEvent(db, "w1", "test", { key: "value" });
+
+  const event = getNextEvent(db, 0);
+  assertEquals(event?.payload, { key: "value" });
   db.close();
 });
 

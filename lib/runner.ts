@@ -8,30 +8,20 @@
  *
  * @module runner
  */
-
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { matchesListen } from "./event.ts";
-import type { DatabaseSync } from "node:sqlite";
-import {
-  getEventsSince,
-  getOrCreateCursor,
-  openDb,
-  pollEvents,
-  pushEvent,
-  updateCursor,
-} from "./event-queue.ts";
-import { runFsWatcher } from "./fs-watcher.ts";
+import { eventMatches } from "./event.ts";
+import { openDb, pushEvent } from "./event-queue.ts";
+import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
-import { sleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
 import { renderTemplate } from "./template.ts";
+import { createWorkerSystem, worker } from "./worker.ts";
+import { forever } from "./utils.ts";
 
 const logger = mainLogger.child({ component: "runner" });
-
-const POLL_BATCH_SIZE = 100;
 
 /**
  * Validates YAML frontmatter attributes from agent markdown files.
@@ -121,21 +111,26 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
 };
 
 /** Load all agent definitions from a directory. */
-export const loadAllAgents = async (
+export async function* loadAllAgents(
   agentsDir: string,
-): Promise<AgentDef[]> => {
-  const agents: AgentDef[] = [];
+): AsyncGenerator<AgentDef> {
   try {
     for await (const entry of Deno.readDir(agentsDir)) {
       if (!entry.isFile || !entry.name.endsWith(".md")) continue;
-      agents.push(await loadAgentDef(join(agentsDir, entry.name)));
+      try {
+        yield await loadAgentDef(join(agentsDir, entry.name));
+      } catch (err) {
+        logger.error("Failed to load agent", { file: entry.name, error: err });
+      }
     }
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) return agents;
+    if (err instanceof Deno.errors.NotFound) {
+      logger.warn("Agents directory not found", { agentsDir });
+      return;
+    }
     throw err;
   }
-  return agents;
-};
+}
 
 /** Build the full system prompt for an agent invocation. */
 export const buildSystemPrompt = (
@@ -272,107 +267,99 @@ export const runShellAgent = async (
   return code;
 };
 
-/** Process events serially for a single agent, advancing cursor after each. */
-const forkAgent = async (
-  agent: AgentDef,
-  db: DatabaseSync,
-  dbPath: string,
-  projectRoot: string,
-): Promise<boolean> => {
-  try {
-    const since = getOrCreateCursor(db, agent.id);
-    // omitWorkerId excludes the agent's own events (including lifecycle events it
-    // pushed). This prevents self-triggering: the cursor still advances past the
-    // agent's own events, but they are never yielded for matching.
-    const allEvents = getEventsSince(db, {
-      sinceId: since,
-      limit: POLL_BATCH_SIZE,
-      omitWorkerId: agent.id,
-    });
+export type FsWorkerEventType =
+  | "file.create"
+  | "file.modify"
+  | "file.delete"
+  | "file.rename";
 
-    for (const event of allEvents) {
-      if (matchesListen(event, agent)) {
-        pushEvent(db, agent.id, "agent.start", {
-          event_id: event.id,
-          event_type: event.type,
-        });
-        const exitCode = agent.type === "shell"
-          ? await runShellAgent(agent, event, projectRoot)
-          : await runClaudeAgent(agent, event, dbPath, projectRoot);
-        if (exitCode === 0) {
-          pushEvent(db, agent.id, "agent.finish", {
-            event_id: event.id,
-            event_type: event.type,
-          });
-        } else {
-          pushEvent(db, agent.id, "agent.error", {
-            event_id: event.id,
-            event_type: event.type,
-            exit_code: exitCode,
-          });
-        }
-      }
-      updateCursor(db, agent.id, event.id);
-    }
-    return true;
-  } catch (err) {
-    logger.error("Agent fork failed", { agent: agent.id, error: err });
-    return false;
+/** Map Deno.FsEvent kind to our event type, or undefined if we should skip it. */
+export const mapFsEventType = (
+  kind: FsEventType,
+): FsWorkerEventType | undefined => {
+  switch (kind) {
+    case "create":
+      return "file.create";
+    case "modify":
+      return "file.modify";
+    case "remove":
+      return "file.delete";
+    case "rename":
+      return "file.rename";
+    default:
+      return undefined;
   }
 };
 
-/** Poll loop: loads agents, polls events, dispatches to matching agents. */
-export const runPollLoop = async ({
-  agentsDir,
-  agentCwd,
-  dbPath,
-  pollIntervalMs,
-}: RunnerConfig) => {
-  logger.info("Poll loop start", {
+/** Main poll loop: loads agents, polls events, dispatches to matching agents. */
+export const runMain = async (
+  {
+    dbPath,
+    agentCwd,
+    agentsDir,
+    pollIntervalMs,
+    watchPaths,
+    excludePaths,
+  }: RunnerConfig,
+): Promise<void> => {
+  logger.info("Starting", {
     db: dbPath,
     interval_ms: pollIntervalMs,
   });
 
   const db = openDb(dbPath);
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
+  const agents = await Array.fromAsync(loadAllAgents(agentsDir));
 
-  try {
-    while (true) {
-      // Emit all new events as NDJSON on stdout
-      const stdoutEvents = pollEvents(db, "_stdout", POLL_BATCH_SIZE);
-      for (const event of stdoutEvents) {
-        console.log(JSON.stringify(event));
-      }
+  const system = createWorkerSystem({ db, timeout: pollIntervalMs });
 
-      // Load agents fresh each time, so we pick up new ones
-      const agents = await loadAllAgents(agentsDir);
+  // Spawn stdout event worker
+  system.spawn(
+    worker("_stdout", (event) => {
+      console.log(JSON.stringify(event));
+    }),
+  );
 
-      const forks = agents.map((agent) =>
-        forkAgent(agent, db, dbPath, projectRoot)
-      );
-      // Wait until this batch of forks completes.
-      // Agents run in parallel, but each agent fork processes each event sequentially.
-      // Waiting for the parallel forks to settle ensures that each agent's cursor
-      // advances without skipping over any events.
-      await Promise.allSettled(forks);
+  // Agent workers
+  for (const agent of agents) {
+    system.spawn(
+      worker(agent.id, async (event) => {
+        if (!eventMatches(event, agent.listen)) {
+          return;
+        }
 
-      await sleep(pollIntervalMs);
-    }
-  } finally {
-    db.close();
+        switch (agent.type) {
+          case "shell":
+            await runShellAgent(agent, event, projectRoot);
+            return;
+          case "claude":
+            await runClaudeAgent(agent, event, dbPath, projectRoot);
+            return;
+          default:
+            throw new Error(`Unknown agent type`);
+        }
+      }),
+    );
   }
-};
 
-/** Main poll loop: loads agents, polls events, dispatches to matching agents. */
-export const runLoop = async (config: RunnerConfig): Promise<void> => {
-  const agentLoopPromise = runPollLoop(config);
-
-  const watcherPromise = runFsWatcher({
-    watchPaths: config.watchPaths,
-    excludePaths: config.excludePaths,
-    dbPath: config.dbPath,
-    agentCwd: config.agentCwd,
+  const stopWatchFs = watchFs({
+    cwd: projectRoot,
+    paths: watchPaths,
+    excludePaths,
+    callback: (event: FsEvent) => {
+      const type = mapFsEventType(event.type);
+      if (type) {
+        pushEvent(db, "fs", type, { paths: event.paths });
+      }
+    },
   });
 
-  await Promise.all([agentLoopPromise, watcherPromise]);
+  Deno.addSignalListener("SIGTERM", async () => {
+    await system.stop();
+    stopWatchFs();
+    db.close();
+    Deno.exit(0);
+  });
+
+  await forever();
 };
