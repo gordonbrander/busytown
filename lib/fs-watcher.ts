@@ -8,22 +8,12 @@
  * @module fs-watcher
  */
 
-import { relative, resolve } from "node:path";
+import { relative } from "node:path";
 import { globToRegExp } from "@std/path";
 import { debounce } from "@std/async/debounce";
-import { pushEvent } from "./event-queue.ts";
 import mainLogger from "./main-logger.ts";
-import { DatabaseSync } from "node:sqlite";
 
-const logger = mainLogger.child({ component: "fs-watcher" });
-
-export type FsWatcherConfig = {
-  db: DatabaseSync;
-  watchPaths: string[];
-  excludePaths: string[];
-  agentCwd: string;
-  abortSignal: AbortSignal;
-};
+const logger = mainLogger.child({ subcomponent: "fs-watcher" });
 
 export const DEFAULT_EXCLUDES = [
   "**/.git/**",
@@ -46,68 +36,72 @@ export function shouldExclude(relPath: string, compiled: RegExp[]): boolean {
   return compiled.some((re) => re.test(relPath));
 }
 
-/** Map Deno.FsEvent kind to our event type, or undefined if we should skip it. */
-const mapEventKind = (
-  kind: Deno.FsEvent["kind"],
-): string | undefined => {
-  switch (kind) {
-    case "create":
-      return "file.created";
-    case "modify":
-      return "file.modified";
-    case "remove":
-      return "file.deleted";
-    default:
-      return undefined;
-  }
+export type Cleanup = () => Promise<void>;
+
+export type FsEventType = Deno.FsEvent["kind"];
+
+export type FsEvent = {
+  type: FsEventType;
+  paths: string[];
 };
 
 /**
- * Run the file system watcher.
- *
- * Opens its own DB connection, watches the configured paths recursively,
- * and pushes events to the queue. Runs indefinitely.
+ * Run a file system watcher.
+ * File system events are debounced to prevent excessive callbacks.
  */
-export const runFsWatcher = async (config: FsWatcherConfig): Promise<void> => {
-  const db = config.db;
-  const projectRoot = resolve(config.agentCwd ?? Deno.cwd());
-  const watchPaths = config.watchPaths.map((p) => resolve(projectRoot, p));
+export const watchFs = ({
+  cwd = Deno.cwd(),
+  paths,
+  excludePaths,
+  callback,
+}: {
+  cwd?: string;
+  paths: string[];
+  excludePaths: string[];
+  callback: (paths: FsEvent) => void;
+}): Cleanup => {
+  logger.info("Watcher starting", {
+    paths,
+  });
 
   const allExcludes = [
     ...DEFAULT_EXCLUDES,
-    ...config.excludePaths,
+    ...excludePaths,
   ];
-  const compiled = compileExcludes(allExcludes);
+  const compiledExcludes = compileExcludes(allExcludes);
 
-  logger.info("Watcher starting", {
-    paths: watchPaths,
-    excludes: allExcludes,
-  });
+  const debouncedCallback = debounce(callback, 200);
+  const watcher = Deno.watchFs(paths, { recursive: true });
 
-  const processEvent = debounce((event: Deno.FsEvent): void => {
-    const eventType = mapEventKind(event.kind);
-    if (eventType == undefined) return;
-
-    for (const absPath of event.paths) {
-      const relPath = relative(projectRoot, absPath);
-      if (shouldExclude(relPath, compiled)) continue;
-      pushEvent(db, "fs", eventType, { path: relPath });
-    }
-  }, 200);
-
-  const watcher = Deno.watchFs(watchPaths, { recursive: true });
-
-  config.abortSignal.addEventListener("abort", () => {
+  const cleanup = async (): Promise<void> => {
     watcher.close();
-    processEvent.clear();
-  });
+    debouncedCallback.clear();
+    await Promise.resolve();
+  };
 
-  try {
-    for await (const event of watcher) {
-      processEvent(event);
+  const forkWatcher = async () => {
+    try {
+      for await (const event of watcher) {
+        const dedupedEvents = new Set<string>(
+          event.paths.filter((absPath): boolean => {
+            const relPath = relative(cwd, absPath);
+            return !shouldExclude(relPath, compiledExcludes);
+          }),
+        );
+
+        if (dedupedEvents.size) {
+          debouncedCallback({
+            type: event.kind,
+            paths: Array.from(dedupedEvents),
+          });
+        }
+      }
+    } finally {
+      await cleanup();
     }
-  } finally {
-    processEvent.clear();
-    watcher.close();
-  }
+  };
+
+  forkWatcher();
+
+  return cleanup;
 };

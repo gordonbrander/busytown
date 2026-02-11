@@ -14,13 +14,15 @@ export type Worker = {
   next: (event: Event) => Promise<void>;
 };
 
+export type Awaitable<T> = Promise<T> | T;
+
 /** Create a worker. */
 export const worker = (
   id: string,
-  next: (event: Event) => Promise<void>,
+  next: (event: Event) => Awaitable<void>,
 ): Worker => ({
   id,
-  next,
+  next: async (event: Event): Promise<void> => await next(event),
 });
 
 type WorkerTask = {
@@ -31,6 +33,7 @@ type WorkerTask = {
 export type WorkerSystem = {
   spawn: (worker: Worker) => void;
   kill: (id: string) => Promise<boolean>;
+  stop: () => Promise<void>;
 };
 
 const systemLogger = mainLogger.child({ subcomponent: "worker-system" });
@@ -114,8 +117,14 @@ export const createWorkerSystem = ({
     }
   };
 
+  /** Stop all workers. Awaits in-flight work before resolving. */
+  const stop = async (): Promise<void> => {
+    await Promise.all([...tasks.keys()].map(kill));
+  };
+
   return {
     spawn,
     kill,
+    stop,
   };
 };

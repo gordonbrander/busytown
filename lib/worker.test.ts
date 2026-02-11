@@ -1,33 +1,21 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { openDb, pushEvent, getCursor } from "./event-queue.ts";
-import { createWorkerSystem } from "./worker.ts";
+import { getCursor, openDb, pushEvent } from "./event-queue.ts";
+import { createWorkerSystem, worker } from "./worker.ts";
 import type { Event } from "./event.ts";
 
 /** Opens a fresh in-memory database with all schemas initialized. */
 const freshDb = () => openDb(":memory:");
-
-/** Creates a promise that can be resolved externally. */
-const deferred = <T = void>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-};
 
 // --- spawn ---
 
 Deno.test("spawn - processes events from the queue", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
-  const received = deferred<Event>();
+  const received = Promise.withResolvers<Event>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      received.resolve(event);
-    },
-  });
+  system.spawn(worker("w1", (event) => {
+    received.resolve(event);
+  }));
 
   pushEvent(db, "producer", "test.event", { hello: "world" });
 
@@ -58,15 +46,12 @@ Deno.test("spawn - processes events in order", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
   const received: string[] = [];
-  const done = deferred();
+  const done = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      received.push(event.type);
-      if (received.length === 3) done.resolve();
-    },
-  });
+  system.spawn(worker("w1", (event) => {
+    received.push(event.type);
+    if (received.length === 3) done.resolve();
+  }));
 
   pushEvent(db, "producer", "first");
   pushEvent(db, "producer", "second");
@@ -82,14 +67,11 @@ Deno.test("spawn - processes events in order", async () => {
 Deno.test("spawn - cursor advances to last processed event", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
-  const done = deferred();
+  const done = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      if (event.type === "b") done.resolve();
-    },
-  });
+  system.spawn(worker("w1", (event) => {
+    if (event.type === "b") done.resolve();
+  }));
 
   // Events pushed after spawn have IDs > cursor
   pushEvent(db, "producer", "a");
@@ -105,15 +87,12 @@ Deno.test("spawn - cursor advances to last processed event", async () => {
 Deno.test("spawn - worker errors do not stop the loop", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
-  const done = deferred();
+  const done = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      if (event.type === "bad") throw new Error("boom");
-      if (event.type === "good") done.resolve();
-    },
-  });
+  system.spawn(worker("w1", (event) => {
+    if (event.type === "bad") throw new Error("boom");
+    if (event.type === "good") done.resolve();
+  }));
 
   pushEvent(db, "producer", "bad");
   pushEvent(db, "producer", "good");
@@ -138,17 +117,14 @@ Deno.test("kill - awaits in-flight work before resolving", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
   let handlerFinished = false;
-  const handlerStarted = deferred();
+  const handlerStarted = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      handlerStarted.resolve();
-      // Simulate slow work
-      await new Promise((r) => setTimeout(r, 50));
-      handlerFinished = true;
-    },
-  });
+  system.spawn(worker("w1", async (_event) => {
+    handlerStarted.resolve();
+    // Simulate slow work
+    await new Promise((r) => setTimeout(r, 50));
+    handlerFinished = true;
+  }));
 
   pushEvent(db, "producer", "slow.task");
 
@@ -165,27 +141,21 @@ Deno.test("kill - awaits in-flight work before resolving", async () => {
 Deno.test("kill - allows re-spawn with same id", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
-  const first = deferred();
-  const second = deferred();
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async () => {
-      first.resolve();
-    },
-  });
+  system.spawn(worker("w1", () => {
+    first.resolve();
+  }));
 
   pushEvent(db, "producer", "event1");
   await first.promise;
   await system.kill("w1");
 
   // Re-spawn with same id
-  system.spawn({
-    id: "w1",
-    next: async () => {
-      second.resolve();
-    },
-  });
+  system.spawn(worker("w1", () => {
+    second.resolve();
+  }));
 
   pushEvent(db, "producer", "event2");
   await second.promise;
@@ -201,26 +171,20 @@ Deno.test("multiple workers process independently", async () => {
   const system = createWorkerSystem({ db, timeout: 10 });
   const w1Events: string[] = [];
   const w2Events: string[] = [];
-  const w1Done = deferred();
-  const w2Done = deferred();
+  const w1Done = Promise.withResolvers<void>();
+  const w2Done = Promise.withResolvers<void>();
 
-  system.spawn({
-    id: "w1",
-    next: async (event) => {
-      if (event.type.startsWith("cursor.")) return;
-      w1Events.push(event.type);
-      if (w1Events.length === 2) w1Done.resolve();
-    },
-  });
+  system.spawn(worker("w1", (event) => {
+    if (event.type.startsWith("cursor.")) return;
+    w1Events.push(event.type);
+    if (w1Events.length === 2) w1Done.resolve();
+  }));
 
-  system.spawn({
-    id: "w2",
-    next: async (event) => {
-      if (event.type.startsWith("cursor.")) return;
-      w2Events.push(event.type);
-      if (w2Events.length === 2) w2Done.resolve();
-    },
-  });
+  system.spawn(worker("w2", (event) => {
+    if (event.type.startsWith("cursor.")) return;
+    w2Events.push(event.type);
+    if (w2Events.length === 2) w2Done.resolve();
+  }));
 
   pushEvent(db, "producer", "a");
   pushEvent(db, "producer", "b");
@@ -233,5 +197,36 @@ Deno.test("multiple workers process independently", async () => {
 
   await system.kill("w1");
   await system.kill("w2");
+  db.close();
+});
+
+// --- stop ---
+
+Deno.test("stop - stops all workers and resolves their promises", async () => {
+  const db = freshDb();
+  const system = createWorkerSystem({ db, timeout: 10 });
+  const w1Started = Promise.withResolvers<void>();
+  const w2Started = Promise.withResolvers<void>();
+
+  system.spawn(worker("w1", (_event) => {
+    w1Started.resolve();
+  }));
+
+  system.spawn(worker("w2", (_event) => {
+    w2Started.resolve();
+  }));
+
+  pushEvent(db, "producer", "ping");
+
+  await Promise.all([w1Started.promise, w2Started.promise]);
+
+  // stop should kill all workers cleanly
+  await system.stop();
+
+  // After stop, spawning with the same ids should work (workers were removed)
+  system.spawn({ id: "w1", next: async () => {} });
+  system.spawn({ id: "w2", next: async () => {} });
+
+  await system.stop();
   db.close();
 });

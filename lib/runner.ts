@@ -11,26 +11,17 @@
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
-import { scheduler } from "node:timers/promises";
 import type { Event } from "./event.ts";
 import { eventMatches } from "./event.ts";
-import type { DatabaseSync } from "node:sqlite";
-import {
-  getEventsSince,
-  getOrCreateCursor,
-  openDb,
-  pushEvent,
-  updateCursor,
-} from "./event-queue.ts";
-import { runFsWatcher } from "./fs-watcher.ts";
+import { openDb, pushEvent } from "./event-queue.ts";
+import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
-import { abortableSleep } from "./utils.ts";
 import { pipeStreamToFile } from "./stream.ts";
 import { renderTemplate } from "./template.ts";
+import { createWorkerSystem, worker } from "./worker.ts";
+import { forever } from "./utils.ts";
 
 const logger = mainLogger.child({ component: "runner" });
-
-const POLL_BATCH_SIZE = 100;
 
 /**
  * Validates YAML frontmatter attributes from agent markdown files.
@@ -276,144 +267,28 @@ export const runShellAgent = async (
   return code;
 };
 
-export type Awaitable<T> = Promise<T> | T;
+export type FsWorkerEventType =
+  | "file.create"
+  | "file.modify"
+  | "file.delete"
+  | "file.rename";
 
-export type EventPoller = {
-  run: () => Promise<void>;
-  stop: () => Promise<void>;
-};
-
-export const eventPoller = async ({
-  db,
-  workerId,
-  pollIntervalMs,
-  limit,
-  abortSignal,
-  callback,
-}: {
-  db: DatabaseSync;
-  workerId: string;
-  pollIntervalMs: number;
-  limit: number;
-  callback: (event: Event) => Awaitable<void>;
-  abortSignal: AbortSignal;
-}): Promise<void> => {
-  const pollLogger = logger.child({
-    subcomponent: "poller",
-    worker: workerId,
-    limit,
-    pollIntervalMs,
-  });
-
-  let shouldRun = true;
-  abortSignal.addEventListener("abort", () => {
-    // Stop polling if aborted
-    shouldRun = false;
-  });
-
-  pollLogger.debug("Start polling");
-
-  while (shouldRun) {
-    pollLogger.debug("Poll");
-    const since = getOrCreateCursor(db, workerId);
-    const events = getEventsSince(db, {
-      sinceId: since,
-      // Don't want to see our own events
-      omitWorkerId: workerId,
-      limit,
-    });
-
-    // No events? Wait for polling interval, then loop again and check.
-    if (events.length === 0) {
-      pollLogger.debug("Sleeping");
-      await abortableSleep(pollIntervalMs, abortSignal);
-      continue;
-    }
-
-    // Process events as fast as we can
-    for (const event of events) {
-      pollLogger.debug("Processing event");
-      try {
-        await callback(event);
-      } catch (err) {
-        pollLogger.error("Error processing event", {
-          error: `${err}`,
-        });
-      }
-      // Update cursor even on failure
-      updateCursor(db, workerId, event.id);
-    }
-
-    // This can be a hot loop. Yield to the main thread periodically
-    // so we don't starve other tasks.
-    await scheduler.yield();
+/** Map Deno.FsEvent kind to our event type, or undefined if we should skip it. */
+export const mapFsEventType = (
+  kind: FsEventType,
+): FsWorkerEventType | undefined => {
+  switch (kind) {
+    case "create":
+      return "file.create";
+    case "modify":
+      return "file.modify";
+    case "remove":
+      return "file.delete";
+    case "rename":
+      return "file.rename";
+    default:
+      return undefined;
   }
-};
-
-/** Independent polling loop for the stdout event log. */
-const pollEventLogger = (
-  db: DatabaseSync,
-  pollIntervalMs: number,
-  abortSignal: AbortSignal,
-): Promise<void> => {
-  return eventPoller({
-    db,
-    workerId: "_stdout",
-    pollIntervalMs,
-    limit: POLL_BATCH_SIZE,
-    abortSignal,
-    callback: (event) => {
-      console.log(JSON.stringify(event));
-    },
-  });
-};
-
-/** Independent polling loop for a single agent. */
-const pollAgent = ({
-  db,
-  agent,
-  dbPath,
-  projectRoot,
-  pollIntervalMs,
-  abortSignal,
-}: {
-  db: DatabaseSync;
-  agent: AgentDef;
-  dbPath: string;
-  projectRoot: string;
-  pollIntervalMs: number;
-  abortSignal: AbortSignal;
-}): Promise<void> => {
-  return eventPoller({
-    db,
-    workerId: agent.id,
-    pollIntervalMs,
-    limit: POLL_BATCH_SIZE,
-    abortSignal,
-    callback: async (event) => {
-      if (eventMatches(event, agent.listen)) {
-        pushEvent(db, agent.id, "agent.start", {
-          event_id: event.id,
-          event_type: event.type,
-        });
-        const exitCode = agent.type === "shell"
-          ? await runShellAgent(agent, event, projectRoot)
-          : await runClaudeAgent(agent, event, dbPath, projectRoot);
-        if (exitCode === 0) {
-          pushEvent(db, agent.id, "agent.finish", {
-            event_id: event.id,
-            event_type: event.type,
-          });
-        } else {
-          pushEvent(db, agent.id, "agent.error", {
-            event_id: event.id,
-            event_type: event.type,
-            exit_code: exitCode,
-          });
-        }
-      }
-    },
-  });
 };
 
 /** Main poll loop: loads agents, polls events, dispatches to matching agents. */
@@ -431,41 +306,60 @@ export const runMain = async (
     db: dbPath,
     interval_ms: pollIntervalMs,
   });
+
   const db = openDb(dbPath);
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
-  const abortController = new AbortController();
-  const abortSignal = abortController.signal;
 
-  try {
-    const eventLoggerPromise = pollEventLogger(db, pollIntervalMs, abortSignal);
+  const system = createWorkerSystem({ db, timeout: pollIntervalMs });
 
-    const agentPromises = agents.map((agent) => {
-      return pollAgent({
-        db,
-        agent,
-        dbPath,
-        projectRoot,
-        pollIntervalMs,
-        abortSignal,
-      });
-    });
+  // Spawn stdout event worker
+  system.spawn(
+    worker("_stdout", (event) => {
+      console.log(JSON.stringify(event));
+    }),
+  );
 
-    const fsWatcherPromise = runFsWatcher({
-      db,
-      watchPaths,
-      excludePaths,
-      agentCwd,
-      abortSignal,
-    });
+  // Agent workers
+  for (const agent of agents) {
+    system.spawn(
+      worker(agent.id, async (event) => {
+        if (!eventMatches(event, agent.listen)) {
+          return;
+        }
 
-    await Promise.allSettled([
-      eventLoggerPromise,
-      ...agentPromises,
-      fsWatcherPromise,
-    ]);
-  } finally {
-    abortController.abort();
-    db.close();
+        switch (agent.type) {
+          case "shell":
+            await runShellAgent(agent, event, projectRoot);
+            return;
+          case "claude":
+            await runClaudeAgent(agent, event, dbPath, projectRoot);
+            return;
+          default:
+            throw new Error(`Unknown agent type`);
+        }
+      }),
+    );
   }
+
+  const stopWatchFs = watchFs({
+    cwd: projectRoot,
+    paths: watchPaths,
+    excludePaths,
+    callback: (event: FsEvent) => {
+      const type = mapFsEventType(event.type);
+      if (type) {
+        pushEvent(db, "fs", type, { paths: event.paths });
+      }
+    },
+  });
+
+  Deno.addSignalListener("SIGTERM", async () => {
+    await system.stop();
+    stopWatchFs();
+    db.close();
+    Deno.exit(0);
+  });
+
+  await forever();
 };
