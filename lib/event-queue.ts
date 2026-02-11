@@ -208,6 +208,25 @@ export const getEventsSince = (
 };
 
 /**
+ * Returns the next single event after a given event ID, or undefined if none.
+ *
+ * @param db - Database connection
+ * @param sinceId - Return the first event with ID greater than this value
+ * @returns The next event, or undefined if there are no new events
+ */
+export const getNextEvent = (
+  db: DatabaseSync,
+  sinceId: number,
+): Event | undefined => {
+  const stmt = db.prepare(
+    "SELECT * FROM events WHERE id > ? ORDER BY id ASC LIMIT 1",
+  );
+  const row = stmt.get(sinceId) as RawEventRow | undefined;
+  if (!row) return undefined;
+  return { ...row, payload: JSON.parse(row.payload) };
+};
+
+/**
  * Polls for new events and automatically advances the worker's cursor.
  *
  * Combines {@link getCursor}, {@link getEventsSince}, and {@link updateCursor}
