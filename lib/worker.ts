@@ -144,7 +144,7 @@ export const createSystem = (
       }
 
       // Immediately update cursor.
-      // We deliver at most once and fan out worker instances.
+      // We deliver at most once.
       updateCursor(db, worker.id, event.id);
 
       if (eventMatches(event, worker.listen)) {
@@ -153,7 +153,7 @@ export const createSystem = (
           workerListen: worker.listen,
           event,
         });
-        manageEffect(worker, event, abortSignal);
+        await manageEffect(worker, event, abortSignal);
       }
 
       // This can be a hot loop, so we yield to the event loop.

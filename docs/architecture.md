@@ -98,8 +98,8 @@ success.
   read, before the effect runs. If processing fails, the event is not
   re-delivered. The SQLite database is the sole source of truth for ordering.
 - **Ordered reads.** Events are read in ID order (ascending), one at a time.
-  However, because effects are fanned out concurrently, execution order is not
-  guaranteed.
+  Effects are processed serially — the worker waits for each effect to complete
+  before reading the next event.
 - **Play-from-now.** New workers start from the current tail, not from the
   beginning of history.
 
@@ -123,14 +123,13 @@ workers. Each worker runs a `forkWorker` loop:
 2. Fetch the next single event after the cursor
 3. If no event, sleep for `pollIntervalMs` and retry
 4. **Immediately advance the cursor** past the event (at-most-once delivery)
-5. If the event matches the worker's `listen` patterns, fire off the effect
-   **without awaiting it** (fan-out)
+5. If the event matches the worker's `listen` patterns, **await the effect**
+   (serial processing)
 6. Yield to the event loop and repeat from step 1
 
-Because the cursor advances before the effect runs, the worker immediately moves
-on to the next event. Multiple effects for the same worker can be in-flight
-concurrently. The `runningEffects` set tracks them so the system can wait for
-all in-flight work during shutdown.
+Workers process events serially — each effect must complete before the worker
+reads the next event. This follows the actor model: one message at a time,
+in order.
 
 ## Agents
 
