@@ -1,8 +1,7 @@
 import { assertEquals } from "@std/assert";
-import { assertRejects } from "@std/assert/rejects";
 import { openDb, pushEvent } from "./event-queue.ts";
 import { type Event } from "./event.ts";
-import { createSystem, type EffectContext, worker } from "./worker.ts";
+import { createSystem, worker } from "./worker.ts";
 
 /** Opens a fresh in-memory database with all schemas initialized. */
 const freshDb = () => openDb(":memory:");
