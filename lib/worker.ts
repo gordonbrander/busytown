@@ -1,125 +1,173 @@
-import { scheduler } from "node:timers/promises";
-import { type DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import {
   getNextEvent,
   getOrCreateCursor,
   updateCursor,
 } from "./event-queue.ts";
-import { type Event } from "./event.ts";
+import { type Event, eventMatches } from "./event.ts";
+import { abortableSleep, nextTick } from "./utils.ts";
 import mainLogger from "./main-logger.ts";
-import { sleep } from "./utils.ts";
+
+export type EffectContext = {
+  abortSignal: AbortSignal;
+};
+
+export type Effect = (event: Event, context: EffectContext) => Promise<void>;
 
 export type Worker = {
   id: string;
-  next: (event: Event) => Promise<void>;
+  listen: string[];
+  run: Effect;
 };
 
 export type Awaitable<T> = Promise<T> | T;
 
-/** Create a worker. */
-export const worker = (
-  id: string,
-  next: (event: Event) => Awaitable<void>,
-): Worker => ({
+export const worker = ({
   id,
-  next: async (event: Event): Promise<void> => await next(event),
+  listen,
+  run,
+}: {
+  id: string;
+  listen: string[];
+  run: (event: Event, context: EffectContext) => Awaitable<void>;
+}): Worker => ({
+  id,
+  listen,
+  run: async (
+    event: Event,
+    context: EffectContext,
+  ) => await run(event, context),
 });
 
-type WorkerTask = {
+export type WorkerHandle = {
   worker: Worker;
-  promise: Promise<void>;
+  fork: Promise<void>;
+  abortController: AbortController;
 };
 
 export type WorkerSystem = {
-  spawn: (worker: Worker) => void;
+  spawn: (worker: Worker) => string;
   kill: (id: string) => Promise<boolean>;
   stop: () => Promise<void>;
 };
 
-const systemLogger = mainLogger.child({ subcomponent: "worker-system" });
+const logger = mainLogger.child({ source: "runner" });
 
-export const createWorkerSystem = ({
-  db,
+export const createSystem = (
+  db: DatabaseSync,
   timeout = 1000,
-}: {
-  db: DatabaseSync;
-  timeout: number;
-}): WorkerSystem => {
-  const tasks = new Map<string, WorkerTask>();
+): WorkerSystem => {
+  const systemAbortController = new AbortController();
+  // Live worker forks
+  const workers: Map<string, WorkerHandle> = new Map();
+  // In-flight effects
+  const runningEffects: Set<Promise<void>> = new Set();
 
-  /** Spawn worker. Starts worker immediately. */
-  const spawn = (worker: Worker): void => {
-    if (tasks.has(worker.id)) {
-      systemLogger.error(`Worker already exists`, { workerId: worker.id });
-      throw new Error(`Worker already exists: ${worker.id}`);
+  const runEffect = async (
+    worker: Worker,
+    event: Event,
+    abortSignal: AbortSignal,
+  ): Promise<void> => {
+    if (abortSignal.aborted) {
+      throw new Error(`Worker aborted: ${worker.id}`);
     }
-    const task: WorkerTask = { worker, promise: Promise.resolve() };
-    tasks.set(worker.id, task);
-    task.promise = fork(worker.id);
+
+    await worker.run(
+      event,
+      { abortSignal },
+    );
   };
 
-  /** Kill worker. Awaits in-flight work before resolving. */
-  const kill = async (id: string): Promise<boolean> => {
-    const task = tasks.get(id);
-    if (!task) {
-      systemLogger.debug(`Can't kill worker. Worker does not exist.`, {
-        workerId: id,
-      });
-      return false;
-    }
-    // Signal the loop to stop, then wait for in-flight work to finish
-    tasks.delete(id);
-    await task.promise;
-    systemLogger.debug(`Killed worker`, { workerId: id });
-    return true;
+  const manageEffect = (
+    worker: Worker,
+    event: Event,
+    abortSignal: AbortSignal,
+  ): Promise<void> => {
+    logger.debug("Effect start", { workerId: worker.id });
+    const promise = runEffect(worker, event, abortSignal).then(() => {
+      runningEffects.delete(promise);
+      logger.debug("Effect finish", { workerId: worker.id });
+    }).catch((error) => {
+      runningEffects.delete(promise);
+      logger.error("Effect error", { workerId: worker.id, error });
+    });
+    runningEffects.add(promise);
+    return promise;
   };
 
-  /** Safely process next event */
-  const next = async (worker: Worker, event: Event): Promise<boolean> => {
-    try {
-      await worker.next(event);
-      return true;
-    } catch (error) {
-      systemLogger.error(`Worker error`, { workerId: worker.id, error });
-      return false;
-    }
-  };
-
-  /** Run worker as long as it is registered */
-  const fork = async (id: string): Promise<void> => {
-    while (true) {
-      // Hot load worker
-      const task = tasks.get(id);
-      // If worker has been removed, nothing to do.
-      if (!task) return;
-      const { worker } = task;
-
+  const forkWorker = async (
+    worker: Worker,
+    abortSignal: AbortSignal,
+  ): Promise<void> => {
+    while (!abortSignal.aborted) {
       const sinceId = getOrCreateCursor(db, worker.id);
-
-      // Get next event
       const event = getNextEvent(db, sinceId);
 
-      // If no event, sleep and try again later.
+      // No event? Check again in `timeout` ms.
       if (!event) {
-        await sleep(timeout);
+        await abortableSleep(timeout, abortSignal);
         continue;
       }
 
-      // Perform work
-      await next(worker, event);
-
-      // Advance cursor whether or not the work was successful
+      // Immediately update cursor.
+      // We deliver at most once and fan out worker instances.
       updateCursor(db, worker.id, event.id);
 
-      // This could be a hot loop, so yield to the scheduler to prevent
-      // starving other tasks.
-      await scheduler.yield();
+      if (eventMatches(event, worker.listen)) {
+        logger.debug("Dispatching event", {
+          workerId: worker.id,
+          workerListen: worker.listen,
+          event,
+        });
+        manageEffect(worker, event, abortSignal);
+      }
+
+      // This can be a hot loop, so we yield to the event loop.
+      await nextTick();
     }
   };
 
-  /** Stop all workers. Awaits in-flight work before resolving. */
+  const spawn = (worker: Worker): string => {
+    if (workers.has(worker.id)) {
+      throw new Error(`Worker already exists: ${worker.id}`);
+    }
+
+    const abortController = new AbortController();
+    const process = forkWorker(
+      worker,
+      AbortSignal.any([
+        systemAbortController.signal,
+        abortController.signal,
+      ]),
+    );
+
+    workers.set(worker.id, {
+      worker,
+      fork: process,
+      abortController,
+    });
+
+    return worker.id;
+  };
+
+  const kill = async (
+    id: string,
+  ): Promise<boolean> => {
+    const worker = workers.get(id);
+    if (!worker) return false;
+    worker.abortController.abort();
+    await worker.fork;
+    return workers.delete(id);
+  };
+
   const stop = async (): Promise<void> => {
-    await Promise.all([...tasks.keys()].map(kill));
+    systemAbortController.abort();
+    // Wait for workers to abort
+    await Promise.allSettled(
+      Array.from(workers.values().map((worker) => worker.fork)),
+    );
+    // Wait for in-flight effects to settle
+    await Promise.allSettled(Array.from(runningEffects));
   };
 
   return {
