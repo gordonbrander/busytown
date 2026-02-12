@@ -25,8 +25,8 @@ simple JSON objects:
 ```
 
 The agent runner polls the queue and dispatches events to matching agents.
-Worker instances are fanned out as fast as events arrive, so more than one
-instance of the same agent may be running at a time. Each agent:
+Agents run in parallel, but each agent processes events serially, one at a time,
+in order. The agent:
 
 - **Listens** for specific event types (exact match, prefix glob like `file.*`,
   or wildcard `*`)

@@ -164,7 +164,44 @@ Deno.test("worker receives multiple events in order", async () => {
   db.close();
 });
 
-// --- fan-out: multiple workers receive the same event ---
+// --- serial processing ---
+
+Deno.test("worker processes events serially", async () => {
+  const db = freshDb();
+  const timeline: string[] = [];
+  const done = deferred();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: async (event) => {
+        timeline.push(`start:${event.type}`);
+        await new Promise((r) => setTimeout(r, 50));
+        timeline.push(`end:${event.type}`);
+        if (event.type === "task.b") done.resolve();
+      },
+    }),
+  );
+
+  pushEvent(db, "pusher", "task.a");
+  pushEvent(db, "pusher", "task.b");
+
+  await done.promise;
+  // Serial: first effect must complete before second starts.
+  assertEquals(timeline, [
+    "start:task.a",
+    "end:task.a",
+    "start:task.b",
+    "end:task.b",
+  ]);
+
+  await system.stop();
+  db.close();
+});
+
+// --- multiple workers receive the same event ---
 
 Deno.test("multiple workers each receive the same event", async () => {
   const db = freshDb();
