@@ -21,6 +21,7 @@ export const DEFAULT_EXCLUDES = [
   "**/.DS_Store",
   "*.pid",
   "*.log",
+  "logs/**",
   "events.db*",
 ];
 

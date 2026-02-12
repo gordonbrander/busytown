@@ -12,13 +12,12 @@ import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { eventMatches } from "./event.ts";
 import { openDb, pushEvent } from "./event-queue.ts";
 import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
 import { pipeStreamToFile } from "./stream.ts";
 import { renderTemplate } from "./template.ts";
-import { createWorkerSystem, worker } from "./worker.ts";
+import { createSystem, worker } from "./worker.ts";
 import { forever } from "./utils.ts";
 
 const logger = mainLogger.child({ component: "runner" });
@@ -311,33 +310,38 @@ export const runMain = async (
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
 
-  const system = createWorkerSystem({ db, timeout: pollIntervalMs });
+  const system = createSystem(db, pollIntervalMs);
 
   // Spawn stdout event worker
   system.spawn(
-    worker("_stdout", (event) => {
-      console.log(JSON.stringify(event));
+    worker({
+      id: "_stdout",
+      hidden: true,
+      listen: ["*"],
+      run: (event) => {
+        console.log(JSON.stringify(event));
+      },
     }),
   );
 
   // Agent workers
   for (const agent of agents) {
     system.spawn(
-      worker(agent.id, async (event) => {
-        if (!eventMatches(event, agent.listen)) {
-          return;
-        }
-
-        switch (agent.type) {
-          case "shell":
-            await runShellAgent(agent, event, projectRoot);
-            return;
-          case "claude":
-            await runClaudeAgent(agent, event, dbPath, projectRoot);
-            return;
-          default:
-            throw new Error(`Unknown agent type`);
-        }
+      worker({
+        id: agent.id,
+        listen: agent.listen,
+        run: async (event) => {
+          switch (agent.type) {
+            case "shell":
+              await runShellAgent(agent, event, projectRoot);
+              return;
+            case "claude":
+              await runClaudeAgent(agent, event, dbPath, projectRoot);
+              return;
+            default:
+              throw new Error(`Unknown agent type`);
+          }
+        },
       }),
     );
   }
@@ -356,7 +360,7 @@ export const runMain = async (
 
   Deno.addSignalListener("SIGTERM", async () => {
     await system.stop();
-    stopWatchFs();
+    await stopWatchFs();
     db.close();
     Deno.exit(0);
   });

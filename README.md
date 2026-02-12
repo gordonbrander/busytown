@@ -24,8 +24,9 @@ simple JSON objects:
 }
 ```
 
-The agent runner polls the queue and dispatches events to matching agents. Each
-agent:
+The agent runner polls the queue and dispatches events to matching agents.
+Worker instances are fanned out as fast as events arrive, so more than one
+instance of the same agent may be running at a time. Each agent:
 
 - **Listens** for specific event types (exact match, prefix glob like `file.*`,
   or wildcard `*`)
@@ -112,7 +113,7 @@ An agent is a markdown file in `agents/` with YAML frontmatter:
 ---
 description: Summarizes new documents
 listen:
-  - "file.created"
+  - "file.create"
 allowed_tools:
   - "Read"
   - "Write"
@@ -158,7 +159,7 @@ heredocs all work:
 ---
 type: shell
 listen:
-  - "file.created"
+  - "file.create"
 ---
 
 path={{event.payload.path}} echo "Processing $path"
@@ -234,9 +235,9 @@ plan <prd-file>        # Push a plan.request event
 
 ## File system watcher
 
-The runner watches directories for file system changes and pushes
-`file.created`, `file.modified`, and `file.deleted` events. By default it
-watches the current directory (`.`).
+The runner watches directories for file system changes and pushes `file.create`,
+`file.modify`, `file.delete`, and `file.rename` events. By default it watches
+the current directory (`.`).
 
 ```bash
 # Watch specific directories
@@ -254,13 +255,13 @@ auto-indexing, summarization, or triggering builds.
 
 ## Key concepts
 
-- **Cursor-based delivery** — Each worker maintains its own cursor in the queue,
-  enabling reliable at-least-once delivery. Workers only see events newer than
-  their cursor.
+- **Cursor-based delivery** — Each worker maintains its own cursor in the queue.
+  The cursor advances immediately when an event is read, before it is processed,
+  giving at-most-once delivery. Workers only see events newer than their cursor.
 - **First-claim-wins** — When multiple agents listen for the same event type,
   `claimEvent()` ensures only one agent processes a given event.
 - **Namespace wildcards** — Event types use dot-separated namespaces. Agents can
-  listen for `file.*` to catch `file.created`, `file.modified`, etc.
+  listen for `file.*` to catch `file.create`, `file.modify`, etc.
 - **Agents are just markdown** — Agent definitions are markdown files. The body
   is the system prompt, the frontmatter is config. Easy to version, review, and
   iterate on.

@@ -1,232 +1,369 @@
-import { assertEquals, assertThrows } from "@std/assert";
-import { getCursor, openDb, pushEvent } from "./event-queue.ts";
-import { createWorkerSystem, worker } from "./worker.ts";
-import type { Event } from "./event.ts";
+import { assertEquals } from "@std/assert";
+import { openDb, pushEvent } from "./event-queue.ts";
+import { type Event } from "./event.ts";
+import { createSystem, worker } from "./worker.ts";
 
 /** Opens a fresh in-memory database with all schemas initialized. */
 const freshDb = () => openDb(":memory:");
 
-// --- spawn ---
+/**
+ * Creates a deferred promise that can be resolved externally.
+ * Useful for waiting on fire-and-forget effects in tests.
+ */
+const deferred = <T = void>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
 
-Deno.test("spawn - processes events from the queue", async () => {
+// --- worker() helper ---
+
+Deno.test("worker - wraps a sync run function as async", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const received = Promise.withResolvers<Event>();
+  const received = deferred<Event>();
 
-  system.spawn(worker("w1", (event) => {
-    received.resolve(event);
-  }));
+  const w = worker({
+    id: "test",
+    listen: ["task.*"],
+    run: (event) => {
+      received.resolve(event);
+    },
+  });
 
-  pushEvent(db, "producer", "test.event", { hello: "world" });
+  const system = createSystem(db, 10);
+  system.spawn(w);
+  pushEvent(db, "pusher", "task.created", { n: 1 });
 
   const event = await received.promise;
-  assertEquals(event.type, "test.event");
-  assertEquals(event.payload, { hello: "world" });
+  assertEquals(event.type, "task.created");
+  assertEquals(event.payload, { n: 1 });
 
-  await system.kill("w1");
+  await system.stop();
   db.close();
 });
 
-Deno.test("spawn - throws if worker already exists", async () => {
-  const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  system.spawn({ id: "w1", next: async () => {} });
+// --- spawn ---
 
-  assertThrows(
-    () => system.spawn({ id: "w1", next: async () => {} }),
-    Error,
-    "Worker already exists: w1",
+Deno.test("spawn - returns the worker id", () => {
+  const db = freshDb();
+  const system = createSystem(db, 10);
+
+  const w = worker({ id: "w1", listen: ["*"], run: () => {} });
+  const id = system.spawn(w);
+  assertEquals(id, "w1");
+
+  system.stop();
+  db.close();
+});
+
+Deno.test("spawn - throws on duplicate worker id", async () => {
+  const db = freshDb();
+  const system = createSystem(db, 10);
+
+  const w = worker({ id: "w1", listen: ["*"], run: () => {} });
+  system.spawn(w);
+
+  let threw = false;
+  try {
+    system.spawn(w);
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+
+  await system.stop();
+  db.close();
+});
+
+// --- event delivery ---
+
+Deno.test("worker receives matching events", async () => {
+  const db = freshDb();
+  const received = deferred<Event>();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.created"],
+      run: (event) => {
+        received.resolve(event);
+      },
+    }),
   );
 
-  await system.kill("w1");
+  pushEvent(db, "pusher", "task.created", { hello: "world" });
+
+  const event = await received.promise;
+  assertEquals(event.type, "task.created");
+  assertEquals(event.payload, { hello: "world" });
+
+  await system.stop();
   db.close();
 });
 
-Deno.test("spawn - processes events in order", async () => {
+Deno.test("worker ignores non-matching events", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const received: string[] = [];
-  const done = Promise.withResolvers<void>();
+  const calls: Event[] = [];
+  const matched = deferred();
 
-  system.spawn(worker("w1", (event) => {
-    received.push(event.type);
-    if (received.length === 3) done.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (event) => {
+        calls.push(event);
+        matched.resolve();
+      },
+    }),
+  );
 
-  pushEvent(db, "producer", "first");
-  pushEvent(db, "producer", "second");
-  pushEvent(db, "producer", "third");
+  // Push a non-matching event, then a matching one.
+  pushEvent(db, "pusher", "file.changed");
+  pushEvent(db, "pusher", "task.done");
 
-  await done.promise;
-  assertEquals(received, ["first", "second", "third"]);
+  await matched.promise;
+  // Only the matching event should have been delivered.
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].type, "task.done");
 
-  await system.kill("w1");
+  await system.stop();
   db.close();
 });
 
-Deno.test("spawn - cursor advances to last processed event", async () => {
+Deno.test("worker receives multiple events in order", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const done = Promise.withResolvers<void>();
+  const calls: Event[] = [];
+  const done = deferred();
 
-  system.spawn(worker("w1", (event) => {
-    if (event.type === "b") done.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (event) => {
+        calls.push(event);
+        if (calls.length === 3) done.resolve();
+      },
+    }),
+  );
 
-  // Events pushed after spawn have IDs > cursor
-  pushEvent(db, "producer", "a");
-  const { id: lastId } = pushEvent(db, "producer", "b");
+  pushEvent(db, "pusher", "task.a");
+  pushEvent(db, "pusher", "task.b");
+  pushEvent(db, "pusher", "task.c");
 
   await done.promise;
-  await system.kill("w1");
+  assertEquals(calls.map((e) => e.type), ["task.a", "task.b", "task.c"]);
 
-  assertEquals(getCursor(db, "w1"), lastId);
+  await system.stop();
   db.close();
 });
 
-Deno.test("spawn - worker errors do not stop the loop", async () => {
+// --- fan-out: multiple workers receive the same event ---
+
+Deno.test("multiple workers each receive the same event", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const done = Promise.withResolvers<void>();
+  const received1 = deferred<Event>();
+  const received2 = deferred<Event>();
 
-  system.spawn(worker("w1", (event) => {
-    if (event.type === "bad") throw new Error("boom");
-    if (event.type === "good") done.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (event) => received1.resolve(event),
+    }),
+  );
+  system.spawn(
+    worker({
+      id: "w2",
+      listen: ["task.*"],
+      run: (event) => received2.resolve(event),
+    }),
+  );
 
-  pushEvent(db, "producer", "bad");
-  pushEvent(db, "producer", "good");
+  pushEvent(db, "pusher", "task.created");
 
-  // Worker should recover from the error and process "good"
-  await done.promise;
-  await system.kill("w1");
+  const [e1, e2] = await Promise.all([received1.promise, received2.promise]);
+  assertEquals(e1.type, "task.created");
+  assertEquals(e2.type, "task.created");
+
+  await system.stop();
+  db.close();
+});
+
+// --- at-most-once delivery ---
+
+Deno.test("at-most-once: failing effect does not redeliver", async () => {
+  const db = freshDb();
+  let callCount = 0;
+  const called = deferred();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: () => {
+        callCount++;
+        called.resolve();
+        throw new Error("effect failed");
+      },
+    }),
+  );
+
+  pushEvent(db, "pusher", "task.created");
+  await called.promise;
+
+  // Give the polling loop a few cycles to ensure no redelivery.
+  await new Promise((r) => setTimeout(r, 50));
+  assertEquals(callCount, 1);
+
+  await system.stop();
   db.close();
 });
 
 // --- kill ---
 
-Deno.test("kill - returns false for non-existent worker", async () => {
+Deno.test("kill - returns true for existing worker", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
+  const system = createSystem(db, 10);
+  system.spawn(worker({ id: "w1", listen: ["*"], run: () => {} }));
 
-  assertEquals(await system.kill("nope"), false);
+  const result = await system.kill("w1");
+  assertEquals(result, true);
+
+  await system.stop();
   db.close();
 });
 
-Deno.test("kill - awaits in-flight work before resolving", async () => {
+Deno.test("kill - returns false for nonexistent worker", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  let handlerFinished = false;
-  const handlerStarted = Promise.withResolvers<void>();
+  const system = createSystem(db, 10);
 
-  system.spawn(worker("w1", async (_event) => {
-    handlerStarted.resolve();
-    // Simulate slow work
-    await new Promise((r) => setTimeout(r, 50));
-    handlerFinished = true;
-  }));
+  const result = await system.kill("nope");
+  assertEquals(result, false);
 
-  pushEvent(db, "producer", "slow.task");
-
-  // Wait for the handler to start
-  await handlerStarted.promise;
-
-  // Kill should block until the handler finishes
-  await system.kill("w1");
-  assertEquals(handlerFinished, true);
-
+  await system.stop();
   db.close();
 });
 
-Deno.test("kill - allows re-spawn with same id", async () => {
+Deno.test("kill - stopped worker no longer receives events", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const first = Promise.withResolvers<void>();
-  const second = Promise.withResolvers<void>();
+  let callCount = 0;
 
-  system.spawn(worker("w1", () => {
-    first.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: () => {
+        callCount++;
+      },
+    }),
+  );
 
-  pushEvent(db, "producer", "event1");
-  await first.promise;
   await system.kill("w1");
 
-  // Re-spawn with same id
-  system.spawn(worker("w1", () => {
-    second.resolve();
-  }));
+  // Push events after kill — worker should not receive them.
+  pushEvent(db, "pusher", "task.created");
+  await new Promise((r) => setTimeout(r, 50));
+  assertEquals(callCount, 0);
 
-  pushEvent(db, "producer", "event2");
-  await second.promise;
-  await system.kill("w1");
-
+  await system.stop();
   db.close();
 });
 
-// --- multiple workers ---
+// --- abort signal ---
 
-Deno.test("multiple workers process independently", async () => {
+Deno.test("effect receives abort signal that aborts on kill", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const w1Events: string[] = [];
-  const w2Events: string[] = [];
-  const w1Done = Promise.withResolvers<void>();
-  const w2Done = Promise.withResolvers<void>();
+  const gotSignal = deferred<AbortSignal>();
 
-  system.spawn(worker("w1", (event) => {
-    if (event.type.startsWith("cursor.")) return;
-    w1Events.push(event.type);
-    if (w1Events.length === 2) w1Done.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (_event, ctx) => {
+        gotSignal.resolve(ctx.abortSignal);
+      },
+    }),
+  );
 
-  system.spawn(worker("w2", (event) => {
-    if (event.type.startsWith("cursor.")) return;
-    w2Events.push(event.type);
-    if (w2Events.length === 2) w2Done.resolve();
-  }));
-
-  pushEvent(db, "producer", "a");
-  pushEvent(db, "producer", "b");
-
-  await Promise.all([w1Done.promise, w2Done.promise]);
-
-  // Both workers see both events
-  assertEquals(w1Events, ["a", "b"]);
-  assertEquals(w2Events, ["a", "b"]);
+  pushEvent(db, "pusher", "task.created");
+  const signal = await gotSignal.promise;
+  assertEquals(signal.aborted, false);
 
   await system.kill("w1");
-  await system.kill("w2");
+  assertEquals(signal.aborted, true);
+
+  await system.stop();
+  db.close();
+});
+
+Deno.test("effect receives abort signal that aborts on stop", async () => {
+  const db = freshDb();
+  const gotSignal = deferred<AbortSignal>();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (_event, ctx) => {
+        gotSignal.resolve(ctx.abortSignal);
+      },
+    }),
+  );
+
+  pushEvent(db, "pusher", "task.created");
+  const signal = await gotSignal.promise;
+  assertEquals(signal.aborted, false);
+
+  await system.stop();
+  assertEquals(signal.aborted, true);
+
   db.close();
 });
 
 // --- stop ---
 
-Deno.test("stop - stops all workers and resolves their promises", async () => {
+Deno.test("stop - waits for in-flight effects to settle", async () => {
   const db = freshDb();
-  const system = createWorkerSystem({ db, timeout: 10 });
-  const w1Started = Promise.withResolvers<void>();
-  const w2Started = Promise.withResolvers<void>();
+  let effectFinished = false;
+  const effectStarted = deferred();
 
-  system.spawn(worker("w1", (_event) => {
-    w1Started.resolve();
-  }));
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: async () => {
+        effectStarted.resolve();
+        await new Promise((r) => setTimeout(r, 50));
+        effectFinished = true;
+      },
+    }),
+  );
 
-  system.spawn(worker("w2", (_event) => {
-    w2Started.resolve();
-  }));
+  pushEvent(db, "pusher", "task.created");
+  await effectStarted.promise;
 
-  pushEvent(db, "producer", "ping");
-
-  await Promise.all([w1Started.promise, w2Started.promise]);
-
-  // stop should kill all workers cleanly
   await system.stop();
+  assertEquals(effectFinished, true);
 
-  // After stop, spawning with the same ids should work (workers were removed)
-  system.spawn({ id: "w1", next: async () => {} });
-  system.spawn({ id: "w2", next: async () => {} });
+  db.close();
+});
 
+Deno.test("stop - can be called with no workers", async () => {
+  const db = freshDb();
+  const system = createSystem(db, 10);
   await system.stop();
   db.close();
 });

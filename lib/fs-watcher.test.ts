@@ -39,6 +39,14 @@ Deno.test("shouldExclude - ignores .log files", () => {
   assertEquals(shouldExclude("error.log", defaultCompiled), true);
 });
 
+Deno.test("shouldExclude - ignores logs directory contents", () => {
+  assertEquals(shouldExclude("logs/plan.log", defaultCompiled), true);
+  assertEquals(shouldExclude("logs/code.log", defaultCompiled), true);
+  assertEquals(shouldExclude("logs/review.log", defaultCompiled), true);
+  assertEquals(shouldExclude("logs/custom-agent.log", defaultCompiled), true);
+  assertEquals(shouldExclude("logs/debug.txt", defaultCompiled), true);
+});
+
 Deno.test("shouldExclude - ignores events.db and variants via glob", () => {
   assertEquals(shouldExclude("events.db", defaultCompiled), true);
   assertEquals(shouldExclude("events.db-shm", defaultCompiled), true);
@@ -83,5 +91,6 @@ Deno.test("shouldExclude - DEFAULT_EXCLUDES contains expected entries", () => {
   assertEquals(DEFAULT_EXCLUDES.includes("**/.DS_Store"), true);
   assertEquals(DEFAULT_EXCLUDES.includes("*.pid"), true);
   assertEquals(DEFAULT_EXCLUDES.includes("*.log"), true);
+  assertEquals(DEFAULT_EXCLUDES.includes("logs/**"), true);
   assertEquals(DEFAULT_EXCLUDES.includes("events.db*"), true);
 });

@@ -70,8 +70,7 @@ Event types use dot-separated namespaces: `entity.action`. Examples:
 - `plan.request`, `plan.created`
 - `code.review`
 - `review.created`
-- `file.created`, `file.modified`, `file.deleted`
-- `agent.start`, `agent.finish`, `agent.error`
+- `file.create`, `file.modify`, `file.delete`, `file.rename`
 - `claim.created`, `cursor.create`
 
 ### Core operations
@@ -82,9 +81,8 @@ with its auto-generated ID and timestamp.
 **getEventsSince(db, options)** — Queries events after a given ID. Supports
 filtering by worker, type, and tail mode.
 
-**pollEvents(db, workerId, limit, omitWorkerId)** — Convenience: gets the
-worker's cursor, fetches new events, advances the cursor. This is the primary
-read path.
+**getNextEvent(db, workerId)** — Gets the worker's cursor, fetches the next
+single event after the cursor. This is the primary read path.
 
 **getOrCreateCursor(db, workerId)** — For existing workers, returns their
 cursor. For new workers, creates a cursor at the current tail so they only see
@@ -96,51 +94,43 @@ success.
 
 ### Delivery guarantees
 
-- **At-least-once.** A worker's cursor only advances after events are fetched.
-  If processing fails mid-batch, the cursor stays put and those events will be
-  re-delivered on the next poll.
-- **Ordered.** Events are delivered in ID order (ascending) within a poll batch.
+- **At-most-once.** A worker's cursor advances immediately when an event is
+  read, before the effect runs. If processing fails, the event is not
+  re-delivered. The SQLite database is the sole source of truth for ordering.
+- **Ordered reads.** Events are read in ID order (ascending), one at a time.
+  However, because effects are fanned out concurrently, execution order is not
+  guaranteed.
 - **Play-from-now.** New workers start from the current tail, not from the
   beginning of history.
 
 ## Agent Runner
 
-The agent runner (`lib/agent-runner.ts`) is an infinite loop that polls the
-event queue and dispatches events to matching agents. It runs two concurrent
-tasks:
+The agent runner (`lib/runner.ts`) starts the worker system and registers
+agents. At startup it:
 
-1. **Poll loop** — loads agents, polls events, dispatches matches
-2. **FS watcher** — monitors the filesystem and pushes `file.*` events
+1. Opens the SQLite database
+2. Loads all agent definitions from `agents/`
+3. Spawns a worker for each agent (plus a `_stdout` worker that logs all events
+   as NDJSON)
+4. Starts the filesystem watcher
 
-### Independent polling loops
+### Worker system (`lib/worker.ts`)
 
-At startup, the runner loads all agent definitions and launches independent
-concurrent loops via `Promise.all`:
+The worker system (`createSystem`) manages a set of independently polling
+workers. Each worker runs a `forkWorker` loop:
 
-- **`pollEvents`** — polls the `_stdout` cursor and emits new events as NDJSON
-  to stdout (for external consumers)
-- **`pollAgent`** (one per agent) — polls events, matches against the agent's
-  `listen` patterns, and invokes the agent subprocess
+1. Read the worker's cursor from the database
+2. Fetch the next single event after the cursor
+3. If no event, sleep for `pollIntervalMs` and retry
+4. **Immediately advance the cursor** past the event (at-most-once delivery)
+5. If the event matches the worker's `listen` patterns, fire off the effect
+   **without awaiting it** (fan-out)
+6. Yield to the event loop and repeat from step 1
 
-Each loop runs independently. A slow agent no longer blocks stdout or other
-agents.
-
-### Event dispatch (pollAgent)
-
-Each agent's loop:
-
-1. Get or create the agent's cursor
-2. Fetch up to 100 events after the cursor, excluding the agent's own events
-   (prevents self-triggering)
-3. For each event, check if it matches the agent's `listen` patterns
-4. If it matches: push `agent.start`, spawn a Claude Code instance, then push
-   `agent.finish` or `agent.error`
-5. Advance the cursor past every event (matched or not)
-6. If any events were processed, immediately re-poll (mailbox drain); otherwise
-   sleep for `pollIntervalMs`
-
-Events within a single agent are processed serially. Different agents run their
-loops concurrently.
+Because the cursor advances before the effect runs, the worker immediately moves
+on to the next event. Multiple effects for the same worker can be in-flight
+concurrently. The `runningEffects` set tracks them so the system can wait for
+all in-flight work during shutdown.
 
 ## Agents
 
@@ -177,7 +167,7 @@ Three patterns, checked in order:
 | Pattern        | Matches                                                     |
 | -------------- | ----------------------------------------------------------- |
 | `plan.created` | Exact match on event type                                   |
-| `file.*`       | Prefix glob — matches `file.created`, `file.modified`, etc. |
+| `file.*`       | Prefix glob — matches `file.create`, `file.modify`, etc.    |
 | `*`            | Wildcard — matches everything except the agent's own events |
 
 ### Agent invocation
@@ -195,32 +185,17 @@ The system prompt is assembled by the runner: a header with the agent's ID,
 description, and event queue CLI instructions, followed by the agent's markdown
 body.
 
-### Self-exclusion
-
-An agent never sees its own events. The runner uses `omitWorkerId: agent.id`
-when fetching events, so an agent's outputs (including lifecycle events) are
-skipped during matching. The cursor still advances past them.
-
-### Lifecycle events
-
-The runner pushes these automatically around each agent invocation:
-
-| Event          | Payload                             |
-| -------------- | ----------------------------------- |
-| `agent.start`  | `{event_id, event_type}`            |
-| `agent.finish` | `{event_id, event_type}`            |
-| `agent.error`  | `{event_id, event_type, exit_code}` |
-
 ## FS Watcher
 
 The filesystem watcher (`lib/fs-watcher.ts`) monitors directories with
 `Deno.watchFs` and pushes events to the queue:
 
-| FS event | Queue event     |
-| -------- | --------------- |
-| create   | `file.created`  |
-| modify   | `file.modified` |
-| remove   | `file.deleted`  |
+| FS event | Queue event   |
+| -------- | ------------- |
+| create   | `file.create` |
+| modify   | `file.modify` |
+| remove   | `file.delete` |
+| rename   | `file.rename` |
 
 Events are debounced (200ms) and filtered through exclude patterns. Common paths
 are excluded by default: `.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,
