@@ -316,6 +316,7 @@ export const runMain = async (
   system.spawn(
     worker({
       id: "_stdout",
+      hidden: true,
       listen: ["*"],
       run: (event) => {
         console.log(JSON.stringify(event));

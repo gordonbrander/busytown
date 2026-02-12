@@ -1,7 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
+import * as Result from "@gordonb/result/result";
 import {
   getNextEvent,
   getOrCreateCursor,
+  pushEvent,
   updateCursor,
 } from "./event-queue.ts";
 import { type Event, eventMatches } from "./event.ts";
@@ -17,6 +19,7 @@ export type Effect = (event: Event, context: EffectContext) => Promise<void>;
 export type Worker = {
   id: string;
   listen: string[];
+  hidden: boolean;
   run: Effect;
 };
 
@@ -25,14 +28,17 @@ export type Awaitable<T> = Promise<T> | T;
 export const worker = ({
   id,
   listen,
+  hidden = false,
   run,
 }: {
   id: string;
+  hidden?: boolean;
   listen: string[];
   run: (event: Event, context: EffectContext) => Awaitable<void>;
 }): Worker => ({
   id,
   listen,
+  hidden,
   run: async (
     event: Event,
     context: EffectContext,
@@ -61,7 +67,7 @@ export const createSystem = (
   // Live worker forks
   const workers: Map<string, WorkerHandle> = new Map();
   // In-flight effects
-  const runningEffects: Set<Promise<void>> = new Set();
+  const runningEffects: Set<Promise<Result.Result<void, Error>>> = new Set();
 
   const runEffect = async (
     worker: Worker,
@@ -78,21 +84,49 @@ export const createSystem = (
     );
   };
 
-  const manageEffect = (
+  const manageEffect = async (
     worker: Worker,
     event: Event,
     abortSignal: AbortSignal,
   ): Promise<void> => {
     logger.debug("Effect start", { workerId: worker.id });
-    const promise = runEffect(worker, event, abortSignal).then(() => {
-      runningEffects.delete(promise);
-      logger.debug("Effect finish", { workerId: worker.id });
-    }).catch((error) => {
-      runningEffects.delete(promise);
-      logger.error("Effect error", { workerId: worker.id, error });
+
+    if (!worker.hidden) {
+      pushEvent(db, worker.id, "worker.effect.start", { eventId: event.id });
+    }
+
+    // Get promise for eventual result of effect and track it.
+    const effectResultPromise = Result.performAsync<void, Error>(async () => {
+      return await runEffect(worker, event, abortSignal);
     });
-    runningEffects.add(promise);
-    return promise;
+    runningEffects.add(effectResultPromise);
+
+    const res = await effectResultPromise;
+    runningEffects.delete(effectResultPromise);
+
+    if (!res.ok) {
+      logger.error("Effect error", {
+        workerId: worker.id,
+        eventId: event.id,
+        error: `${res.error}`,
+      });
+      if (!worker.hidden) {
+        pushEvent(db, worker.id, "worker.effect.error", {
+          eventId: event.id,
+          error: `${res.error}`,
+        });
+      }
+    } else {
+      logger.debug("Effect finish", {
+        workerId: worker.id,
+        eventId: event.id,
+      });
+      if (!worker.hidden) {
+        pushEvent(db, worker.id, "worker.effect.finish", {
+          eventId: event.id,
+        });
+      }
+    }
   };
 
   const forkWorker = async (
