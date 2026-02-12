@@ -98,8 +98,8 @@ success.
   read, before the effect runs. If processing fails, the event is not
   re-delivered. The SQLite database is the sole source of truth for ordering.
 - **Ordered reads.** Events are read in ID order (ascending), one at a time.
-  However, because effects are fanned out concurrently, execution order is
-  not guaranteed.
+  However, because effects are fanned out concurrently, execution order is not
+  guaranteed.
 - **Play-from-now.** New workers start from the current tail, not from the
   beginning of history.
 
@@ -110,8 +110,8 @@ agents. At startup it:
 
 1. Opens the SQLite database
 2. Loads all agent definitions from `agents/`
-3. Spawns a worker for each agent (plus a `_stdout` worker that logs all
-   events as NDJSON)
+3. Spawns a worker for each agent (plus a `_stdout` worker that logs all events
+   as NDJSON)
 4. Starts the filesystem watcher
 
 ### Worker system (`lib/worker.ts`)
@@ -127,10 +127,10 @@ workers. Each worker runs a `forkWorker` loop:
    **without awaiting it** (fan-out)
 6. Yield to the event loop and repeat from step 1
 
-Because the cursor advances before the effect runs, the worker immediately
-moves on to the next event. Multiple effects for the same worker can be
-in-flight concurrently. The `runningEffects` set tracks them so the system
-can wait for all in-flight work during shutdown.
+Because the cursor advances before the effect runs, the worker immediately moves
+on to the next event. Multiple effects for the same worker can be in-flight
+concurrently. The `runningEffects` set tracks them so the system can wait for
+all in-flight work during shutdown.
 
 ## Agents
 
@@ -167,7 +167,7 @@ Three patterns, checked in order:
 | Pattern        | Matches                                                     |
 | -------------- | ----------------------------------------------------------- |
 | `plan.created` | Exact match on event type                                   |
-| `file.*`       | Prefix glob — matches `file.create`, `file.modify`, etc.   |
+| `file.*`       | Prefix glob — matches `file.create`, `file.modify`, etc.    |
 | `*`            | Wildcard — matches everything except the agent's own events |
 
 ### Agent invocation
@@ -190,12 +190,12 @@ body.
 The filesystem watcher (`lib/fs-watcher.ts`) monitors directories with
 `Deno.watchFs` and pushes events to the queue:
 
-| FS event | Queue event    |
-| -------- | -------------- |
-| create   | `file.create`  |
-| modify   | `file.modify`  |
-| remove   | `file.delete`  |
-| rename   | `file.rename`  |
+| FS event | Queue event   |
+| -------- | ------------- |
+| create   | `file.create` |
+| modify   | `file.modify` |
+| remove   | `file.delete` |
+| rename   | `file.rename` |
 
 Events are debounced (200ms) and filtered through exclude patterns. Common paths
 are excluded by default: `.git`, `node_modules`, `.DS_Store`, `*.pid`, `*.log`,

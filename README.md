@@ -235,9 +235,9 @@ plan <prd-file>        # Push a plan.request event
 
 ## File system watcher
 
-The runner watches directories for file system changes and pushes
-`file.create`, `file.modify`, `file.delete`, and `file.rename` events. By default it
-watches the current directory (`.`).
+The runner watches directories for file system changes and pushes `file.create`,
+`file.modify`, `file.delete`, and `file.rename` events. By default it watches
+the current directory (`.`).
 
 ```bash
 # Watch specific directories
