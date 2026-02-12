@@ -9,7 +9,7 @@ import { runMain } from "../lib/runner.ts";
 import { shellEscape } from "../lib/shell.ts";
 import mainLogger from "../lib/main-logger.ts";
 
-const logger = mainLogger.child({ component: "daemon" });
+const logger = mainLogger.child({ source: "daemon" });
 
 // --- Constants ---
 

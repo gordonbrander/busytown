@@ -1,13 +1,10 @@
 import { assertEquals } from "@std/assert";
-import {
-  compileExcludes,
-  DEFAULT_EXCLUDES,
-  shouldExclude,
-} from "./fs-watcher.ts";
+import { compileExcludes, shouldExclude } from "./fs-watcher.ts";
+import { DEFAULT_FS_WATCHER_EXCLUDES } from "./runner.ts";
 
 // --- shouldExclude ---
 
-const defaultCompiled = compileExcludes(DEFAULT_EXCLUDES);
+const defaultCompiled = compileExcludes(DEFAULT_FS_WATCHER_EXCLUDES);
 
 Deno.test("shouldExclude - ignores .git subdirectories", () => {
   assertEquals(shouldExclude(".git/objects/abc123", defaultCompiled), true);
@@ -75,13 +72,4 @@ Deno.test("shouldExclude - glob patterns: test?.txt matches single char wildcard
   assertEquals(shouldExclude("testA.txt", custom), true);
   assertEquals(shouldExclude("test12.txt", custom), false);
   assertEquals(shouldExclude("test.txt", custom), false);
-});
-
-Deno.test("shouldExclude - DEFAULT_EXCLUDES contains expected entries", () => {
-  assertEquals(DEFAULT_EXCLUDES.includes("**/.git/**"), true);
-  assertEquals(DEFAULT_EXCLUDES.includes("**/node_modules/**"), true);
-  assertEquals(DEFAULT_EXCLUDES.includes("**/.DS_Store"), true);
-  assertEquals(DEFAULT_EXCLUDES.includes("*.pid"), true);
-  assertEquals(DEFAULT_EXCLUDES.includes("*.log"), true);
-  assertEquals(DEFAULT_EXCLUDES.includes("events.db*"), true);
 });

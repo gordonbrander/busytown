@@ -1,4 +1,5 @@
 ---
+name: "review"
 description: Reviews code changes for correctness, type safety, and style
 listen:
   - "code.review"

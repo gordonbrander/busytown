@@ -1,4 +1,5 @@
 ---
+name: "code"
 description: Implements code changes by following plans written by the plan agent
 listen:
   - "plan.created"

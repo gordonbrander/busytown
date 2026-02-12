@@ -13,9 +13,9 @@ Deno.test("spawn - processes events from the queue", async () => {
   const system = createWorkerSystem({ db, timeout: 10 });
   const received = Promise.withResolvers<Event>();
 
-  system.spawn(worker("w1", (event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (event) => {
     received.resolve(event);
-  }));
+  }}));
 
   pushEvent(db, "producer", "test.event", { hello: "world" });
 
@@ -30,10 +30,10 @@ Deno.test("spawn - processes events from the queue", async () => {
 Deno.test("spawn - throws if worker already exists", async () => {
   const db = freshDb();
   const system = createWorkerSystem({ db, timeout: 10 });
-  system.spawn({ id: "w1", next: async () => {} });
+  system.spawn({ id: "w1", listen: ["*"], next: async () => {} });
 
   assertThrows(
-    () => system.spawn({ id: "w1", next: async () => {} }),
+    () => system.spawn({ id: "w1", listen: ["*"], next: async () => {} }),
     Error,
     "Worker already exists: w1",
   );
@@ -48,10 +48,10 @@ Deno.test("spawn - processes events in order", async () => {
   const received: string[] = [];
   const done = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", (event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (event) => {
     received.push(event.type);
     if (received.length === 3) done.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "first");
   pushEvent(db, "producer", "second");
@@ -69,9 +69,9 @@ Deno.test("spawn - cursor advances to last processed event", async () => {
   const system = createWorkerSystem({ db, timeout: 10 });
   const done = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", (event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (event) => {
     if (event.type === "b") done.resolve();
-  }));
+  }}));
 
   // Events pushed after spawn have IDs > cursor
   pushEvent(db, "producer", "a");
@@ -89,10 +89,10 @@ Deno.test("spawn - worker errors do not stop the loop", async () => {
   const system = createWorkerSystem({ db, timeout: 10 });
   const done = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", (event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (event) => {
     if (event.type === "bad") throw new Error("boom");
     if (event.type === "good") done.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "bad");
   pushEvent(db, "producer", "good");
@@ -119,12 +119,12 @@ Deno.test("kill - awaits in-flight work before resolving", async () => {
   let handlerFinished = false;
   const handlerStarted = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", async (_event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: async (_event) => {
     handlerStarted.resolve();
     // Simulate slow work
     await new Promise((r) => setTimeout(r, 50));
     handlerFinished = true;
-  }));
+  }}));
 
   pushEvent(db, "producer", "slow.task");
 
@@ -144,18 +144,18 @@ Deno.test("kill - allows re-spawn with same id", async () => {
   const first = Promise.withResolvers<void>();
   const second = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", () => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: () => {
     first.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "event1");
   await first.promise;
   await system.kill("w1");
 
   // Re-spawn with same id
-  system.spawn(worker("w1", () => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: () => {
     second.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "event2");
   await second.promise;
@@ -174,17 +174,17 @@ Deno.test("multiple workers process independently", async () => {
   const w1Done = Promise.withResolvers<void>();
   const w2Done = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", (event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (event) => {
     if (event.type.startsWith("cursor.")) return;
     w1Events.push(event.type);
     if (w1Events.length === 2) w1Done.resolve();
-  }));
+  }}));
 
-  system.spawn(worker("w2", (event) => {
+  system.spawn(worker({ id: "w2", listen: ["*"], next: (event) => {
     if (event.type.startsWith("cursor.")) return;
     w2Events.push(event.type);
     if (w2Events.length === 2) w2Done.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "a");
   pushEvent(db, "producer", "b");
@@ -208,13 +208,13 @@ Deno.test("stop - stops all workers and resolves their promises", async () => {
   const w1Started = Promise.withResolvers<void>();
   const w2Started = Promise.withResolvers<void>();
 
-  system.spawn(worker("w1", (_event) => {
+  system.spawn(worker({ id: "w1", listen: ["*"], next: (_event) => {
     w1Started.resolve();
-  }));
+  }}));
 
-  system.spawn(worker("w2", (_event) => {
+  system.spawn(worker({ id: "w2", listen: ["*"], next: (_event) => {
     w2Started.resolve();
-  }));
+  }}));
 
   pushEvent(db, "producer", "ping");
 
@@ -224,9 +224,37 @@ Deno.test("stop - stops all workers and resolves their promises", async () => {
   await system.stop();
 
   // After stop, spawning with the same ids should work (workers were removed)
-  system.spawn({ id: "w1", next: async () => {} });
-  system.spawn({ id: "w2", next: async () => {} });
+  system.spawn({ id: "w1", listen: ["*"], next: async () => {} });
+  system.spawn({ id: "w2", listen: ["*"], next: async () => {} });
 
   await system.stop();
+  db.close();
+});
+
+// --- listen filtering ---
+
+Deno.test("listen - only calls next for matching events, cursor still advances", async () => {
+  const db = freshDb();
+  const system = createWorkerSystem({ db, timeout: 10 });
+  const received: string[] = [];
+  const done = Promise.withResolvers<void>();
+
+  system.spawn(worker({ id: "w1", listen: ["test.*"], next: (event) => {
+    received.push(event.type);
+    if (event.type === "test.last") done.resolve();
+  }}));
+
+  pushEvent(db, "producer", "test.first");
+  pushEvent(db, "producer", "other.skip");
+  const { id: lastId } = pushEvent(db, "producer", "test.last");
+
+  await done.promise;
+  await system.kill("w1");
+
+  // Only matching events were delivered to next
+  assertEquals(received, ["test.first", "test.last"]);
+  // Cursor advanced past all events, including the skipped one
+  assertEquals(getCursor(db, "w1"), lastId);
+
   db.close();
 });

@@ -3,7 +3,7 @@ import { fileJsonDriver, Logger } from "./logger.ts";
 /** Top level logger */
 export const logger = new Logger(
   {
-    component: "busytown",
+    source: "busytown",
   },
   {
     driver: fileJsonDriver("busytown.log"),

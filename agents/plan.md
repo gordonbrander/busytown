@@ -1,4 +1,5 @@
 ---
+name: "plan"
 description: Explores the codebase and writes implementation plans as markdown files
 listen:
   - "plan.request"

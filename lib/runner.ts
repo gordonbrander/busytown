@@ -10,18 +10,17 @@
  */
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { eventMatches } from "./event.ts";
 import { openDb, pushEvent } from "./event-queue.ts";
 import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import mainLogger from "./main-logger.ts";
 import { pipeStreamToFile } from "./stream.ts";
 import { renderTemplate } from "./template.ts";
-import { createWorkerSystem, worker } from "./worker.ts";
+import { createWorkerSystem, worker, type WorkerSystem } from "./worker.ts";
 import { forever } from "./utils.ts";
 
-const logger = mainLogger.child({ component: "runner" });
+const logger = mainLogger.child({ source: "runner" });
 
 /**
  * Validates YAML frontmatter attributes from agent markdown files.
@@ -31,6 +30,7 @@ const logger = mainLogger.child({ component: "runner" });
  */
 const AgentFrontmatterSchema = z.object({
   type: z.enum(["claude", "shell"]).default("claude"),
+  name: z.string(),
   description: z.string().default(""),
   listen: z.array(z.string()).default([]),
   allowed_tools: z.array(z.string()).default([]),
@@ -87,7 +87,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   switch (frontmatter.type) {
     case "claude":
       return {
-        id: basename(filePath, ".md"),
+        id: frontmatter.name,
         type: "claude",
         description: frontmatter.description,
         listen: frontmatter.listen,
@@ -98,7 +98,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
       };
     case "shell":
       return {
-        id: basename(filePath, ".md"),
+        id: frontmatter.name,
         type: frontmatter.type,
         description: frontmatter.description,
         listen: frontmatter.listen,
@@ -267,6 +267,38 @@ export const runShellAgent = async (
   return code;
 };
 
+/** Spawn a worker for an agent definition. */
+const spawnAgentWorker = ({
+  system,
+  agent,
+  dbPath,
+  cwd,
+}: {
+  system: WorkerSystem;
+  agent: AgentDef;
+  dbPath: string;
+  cwd: string;
+}): void => {
+  system.spawn(
+    worker({
+      id: agent.id,
+      listen: agent.listen,
+      next: async (event) => {
+        switch (agent.type) {
+          case "shell":
+            await runShellAgent(agent, event, cwd);
+            return;
+          case "claude":
+            await runClaudeAgent(agent, event, dbPath, cwd);
+            return;
+          default:
+            throw new Error(`Unknown agent type`);
+        }
+      },
+    }),
+  );
+};
+
 export type FsWorkerEventType =
   | "file.create"
   | "file.modify"
@@ -291,6 +323,17 @@ export const mapFsEventType = (
   }
 };
 
+/** Default excluded files for file system watcher */
+export const DEFAULT_FS_WATCHER_EXCLUDES = [
+  "**/.git/**",
+  "**/node_modules/**",
+  "**/.DS_Store",
+  "*.pid",
+  "*.log",
+  "log/**",
+  "events.db*",
+];
+
 /** Main poll loop: loads agents, polls events, dispatches to matching agents. */
 export const runMain = async (
   {
@@ -308,44 +351,35 @@ export const runMain = async (
   });
 
   const db = openDb(dbPath);
-  const projectRoot = resolve(agentCwd ?? Deno.cwd());
+  const cwd = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
 
   const system = createWorkerSystem({ db, timeout: pollIntervalMs });
 
   // Spawn stdout event worker
   system.spawn(
-    worker("_stdout", (event) => {
-      console.log(JSON.stringify(event));
+    worker({
+      id: "_stdout",
+      listen: ["*"],
+      next: (event) => {
+        console.log(JSON.stringify(event));
+      },
     }),
   );
 
   // Agent workers
   for (const agent of agents) {
-    system.spawn(
-      worker(agent.id, async (event) => {
-        if (!eventMatches(event, agent.listen)) {
-          return;
-        }
-
-        switch (agent.type) {
-          case "shell":
-            await runShellAgent(agent, event, projectRoot);
-            return;
-          case "claude":
-            await runClaudeAgent(agent, event, dbPath, projectRoot);
-            return;
-          default:
-            throw new Error(`Unknown agent type`);
-        }
-      }),
-    );
+    spawnAgentWorker({ agent, system, dbPath, cwd });
   }
 
   const stopWatchFs = watchFs({
-    cwd: projectRoot,
+    cwd,
     paths: watchPaths,
-    excludePaths,
+    excludePaths: [
+      ...DEFAULT_FS_WATCHER_EXCLUDES,
+      ...excludePaths,
+      `${resolve(agentsDir)}/**`,
+    ],
     callback: (event: FsEvent) => {
       const type = mapFsEventType(event.type);
       if (type) {
@@ -354,9 +388,31 @@ export const runMain = async (
     },
   });
 
+  const stopWatchAgents = watchFs({
+    cwd,
+    paths: [agentsDir],
+    excludePaths: DEFAULT_FS_WATCHER_EXCLUDES,
+    recursive: false,
+    callback: async (event: FsEvent) => {
+      for (const path of event.paths) {
+        if (!path.endsWith(".md")) continue;
+        const agent = await loadAgentDef(path);
+
+        if (event.type === "remove") {
+          await system.kill(agent.id);
+        } else {
+          await system.kill(agent.id);
+          // Spawn new worker
+          spawnAgentWorker({ agent, system, dbPath, cwd });
+        }
+      }
+    },
+  });
+
   Deno.addSignalListener("SIGTERM", async () => {
     await system.stop();
     stopWatchFs();
+    stopWatchAgents();
     db.close();
     Deno.exit(0);
   });

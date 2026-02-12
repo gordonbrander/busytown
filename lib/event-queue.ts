@@ -16,7 +16,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Event, RawEventRow } from "./event.ts";
 import mainLogger from "./main-logger.ts";
 
-const logger = mainLogger.child({ component: "event-queue" });
+const logger = mainLogger.child({ source: "event-queue" });
 
 // Local Zod schemas for ad-hoc row shapes returned by SQL queries
 const InsertReturningRowSchema = z.object({

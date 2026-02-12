@@ -13,16 +13,7 @@ import { globToRegExp } from "@std/path";
 import { debounce } from "@std/async/debounce";
 import mainLogger from "./main-logger.ts";
 
-const logger = mainLogger.child({ subcomponent: "fs-watcher" });
-
-export const DEFAULT_EXCLUDES = [
-  "**/.git/**",
-  "**/node_modules/**",
-  "**/.DS_Store",
-  "*.pid",
-  "*.log",
-  "events.db*",
-];
+const logger = mainLogger.child({ source: "fs-watcher" });
 
 /** Compile an array of glob patterns into RegExp objects for matching. */
 export function compileExcludes(patterns: string[]): RegExp[] {
@@ -52,26 +43,28 @@ export type FsEvent = {
 export const watchFs = ({
   cwd = Deno.cwd(),
   paths,
-  excludePaths,
+  excludePaths = [],
   callback,
+  recursive = true,
 }: {
   cwd?: string;
   paths: string[];
-  excludePaths: string[];
+  excludePaths?: string[];
   callback: (paths: FsEvent) => void;
+  recursive?: boolean;
 }): Cleanup => {
   logger.info("Watcher starting", {
     paths,
   });
 
-  const allExcludes = [
-    ...DEFAULT_EXCLUDES,
-    ...excludePaths,
-  ];
-  const compiledExcludes = compileExcludes(allExcludes);
+  const compiledExcludes = compileExcludes(excludePaths);
 
-  const debouncedCallback = debounce(callback, 200);
-  const watcher = Deno.watchFs(paths, { recursive: true });
+  const debouncedCallback = debounce((event) => {
+    logger.debug("Files changed", { event });
+    callback(event);
+  }, 200);
+
+  const watcher = Deno.watchFs(paths, { recursive });
 
   const cleanup = async (): Promise<void> => {
     watcher.close();
