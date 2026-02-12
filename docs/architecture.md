@@ -128,8 +128,8 @@ workers. Each worker runs a `forkWorker` loop:
 6. Yield to the event loop and repeat from step 1
 
 Workers process events serially — each effect must complete before the worker
-reads the next event. This follows the actor model: one message at a time,
-in order.
+reads the next event. This follows the actor model: one message at a time, in
+order.
 
 ## Agents
 
