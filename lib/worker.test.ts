@@ -404,3 +404,61 @@ Deno.test("stop - can be called with no workers", async () => {
   await system.stop();
   db.close();
 });
+
+// --- ignoreSelf ---
+
+Deno.test("ignoreSelf - worker ignores events it emitted", async () => {
+  const db = freshDb();
+  const calls: Event[] = [];
+  const received = deferred();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      run: (event) => {
+        calls.push(event);
+        received.resolve();
+      },
+    }),
+  );
+
+  // Event emitted by w1 itself — should be ignored (ignoreSelf defaults to true)
+  pushEvent(db, "w1", "task.created", { self: true });
+  // Event emitted by another worker — should be delivered
+  pushEvent(db, "other", "task.created", { self: false });
+
+  await received.promise;
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].worker_id, "other");
+
+  await system.stop();
+  db.close();
+});
+
+Deno.test("ignoreSelf false - worker sees its own events", async () => {
+  const db = freshDb();
+  const received = deferred<Event>();
+
+  const system = createSystem(db, 10);
+  system.spawn(
+    worker({
+      id: "w1",
+      listen: ["task.*"],
+      ignoreSelf: false,
+      run: (event) => {
+        received.resolve(event);
+      },
+    }),
+  );
+
+  pushEvent(db, "w1", "task.created", { self: true });
+
+  const event = await received.promise;
+  assertEquals(event.worker_id, "w1");
+  assertEquals(event.payload, { self: true });
+
+  await system.stop();
+  db.close();
+});
