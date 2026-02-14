@@ -20,6 +20,7 @@ export type Worker = {
   id: string;
   listen: string[];
   hidden: boolean;
+  ignoreSelf: boolean;
   run: Effect;
 };
 
@@ -29,16 +30,19 @@ export const worker = ({
   id,
   listen,
   hidden = false,
+  ignoreSelf = true,
   run,
 }: {
   id: string;
   hidden?: boolean;
+  ignoreSelf?: boolean;
   listen: string[];
   run: (event: Event, context: EffectContext) => Awaitable<void>;
 }): Worker => ({
   id,
   listen,
   hidden,
+  ignoreSelf,
   run: async (
     event: Event,
     context: EffectContext,
@@ -146,6 +150,12 @@ export const createSystem = (
       // Immediately update cursor.
       // We deliver at most once.
       updateCursor(db, worker.id, event.id);
+
+      // Skip events emitted by this worker when ignoreSelf is enabled.
+      if (worker.ignoreSelf && event.worker_id === worker.id) {
+        await nextTick();
+        continue;
+      }
 
       if (eventMatches(event, worker.listen)) {
         logger.debug("Dispatching event", {
