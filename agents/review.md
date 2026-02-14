@@ -2,6 +2,8 @@
 description: Reviews code changes for correctness, type safety, and style
 listen:
   - "code.review"
+emits:
+  - "review.created"
 allowed_tools:
   - "Read"
   - "Grep"

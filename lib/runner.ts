@@ -33,6 +33,7 @@ const AgentFrontmatterSchema = z.object({
   description: z.string().default(""),
   listen: z.array(z.string()).default([]),
   ignore_self: z.boolean().default(true),
+  emits: z.array(z.string()).default([]),
   allowed_tools: z.array(z.string()).default([]),
   model: z.string().optional(),
   effort: z.enum(["low", "medium", "high"]).optional(),
@@ -46,6 +47,7 @@ export const ClaudeAgentDefSchema = z.object({
   description: z.string().default(""),
   listen: z.array(z.string()).default([]),
   ignoreSelf: z.boolean().default(true),
+  emits: z.array(z.string()).default([]),
   allowedTools: z.array(z.string()).default([]),
   body: z.string().default("").describe("The agent system prompt"),
   model: z.string().optional(),
@@ -60,6 +62,7 @@ export const ShellAgentDefSchema = z.object({
   description: z.string().default(""),
   listen: z.array(z.string()).default([]),
   ignoreSelf: z.boolean().default(true),
+  emits: z.array(z.string()).default([]),
   body: z.string().describe("The script to run"),
 });
 
@@ -94,6 +97,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
         description: frontmatter.description,
         listen: frontmatter.listen,
         ignoreSelf: frontmatter.ignore_self,
+        emits: frontmatter.emits,
         allowedTools: frontmatter.allowed_tools,
         body: body.trim(),
         model: frontmatter.model,
@@ -106,6 +110,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
         description: frontmatter.description,
         listen: frontmatter.listen,
         ignoreSelf: frontmatter.ignore_self,
+        emits: frontmatter.emits,
         body,
       };
     default:

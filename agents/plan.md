@@ -3,6 +3,9 @@ description: Explores the codebase and writes implementation plans as markdown f
 listen:
   - "plan.request"
   - "review.created"
+emits:
+  - "plan.created"
+  - "plan.complete"
 allowed_tools:
   - "Read"
   - "Grep"

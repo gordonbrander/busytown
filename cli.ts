@@ -10,6 +10,7 @@
 
 import { Command } from "@cliffy/command";
 import { eventsCommand } from "./scripts/events.ts";
+import { mapCommand } from "./scripts/map.ts";
 import {
   daemonCommand,
   restartCommand,
@@ -30,6 +31,7 @@ await new Command()
   .command("status", statusCommand)
   .command("_daemon", daemonCommand())
   .command("events", eventsCommand)
+  .command("map", mapCommand())
   .command("plan")
   .description("Push a plan.request event for a PRD file.")
   .option("--db <path:string>", "Database path", { default: "events.db" })
