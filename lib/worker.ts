@@ -96,7 +96,7 @@ export const createSystem = (
     logger.debug("Effect start", { workerId: worker.id });
 
     if (!worker.hidden) {
-      pushEvent(db, worker.id, "worker.effect.start", { eventId: event.id });
+      pushEvent(db, worker.id, "sys.worker.start", { eventId: event.id });
     }
 
     // Get promise for eventual result of effect and track it.
@@ -115,7 +115,7 @@ export const createSystem = (
         error: `${res.error}`,
       });
       if (!worker.hidden) {
-        pushEvent(db, worker.id, "worker.effect.error", {
+        pushEvent(db, worker.id, "sys.worker.error", {
           eventId: event.id,
           error: `${res.error}`,
         });
@@ -126,7 +126,7 @@ export const createSystem = (
         eventId: event.id,
       });
       if (!worker.hidden) {
-        pushEvent(db, worker.id, "worker.effect.finish", {
+        pushEvent(db, worker.id, "sys.worker.finish", {
           eventId: event.id,
         });
       }

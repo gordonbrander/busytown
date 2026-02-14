@@ -277,7 +277,7 @@ export const updateCursor = (
  * Gets or creates a cursor for a worker.
  *
  * If the worker already has a cursor, returns its current position.
- * Otherwise, pushes a `cursor.create` event, sets the cursor to that
+ * Otherwise, pushes a `sys.cursor.create` event, sets the cursor to that
  * event's ID, and returns it — so the new worker starts from the current
  * tail rather than replaying all history.
  *
@@ -294,7 +294,7 @@ export const getOrCreateCursor = (
       "SELECT since FROM worker_cursors WHERE worker_id = ?",
     ).get(workerId) as CursorRow | undefined;
     if (existing) return existing.since;
-    const event = pushEvent(db, "runner", "cursor.create", {
+    const event = pushEvent(db, workerId, "sys.cursor.create", {
       agent_id: workerId,
     });
     updateCursor(db, workerId, event.id);
@@ -306,7 +306,7 @@ export const getOrCreateCursor = (
  * Claims an event for a worker (first-claim-wins).
  *
  * Uses INSERT OR IGNORE with the PRIMARY KEY constraint to ensure only the
- * first worker to claim an event succeeds. Emits a `claim.created` event on success.
+ * first worker to claim an event succeeds. Emits a `sys.claim.created` event on success.
  *
  * @param db - Database connection
  * @param workerId - Worker ID attempting the claim
@@ -327,7 +327,7 @@ export const claimEvent = (
     const check = db.prepare("SELECT worker_id FROM claims WHERE event_id = ?");
     const row = check.get(eventId) as ClaimWorkerRow | undefined;
     if (row && row.worker_id === workerId) {
-      pushEvent(db, workerId, "claim.created", { event_id: eventId });
+      pushEvent(db, workerId, "sys.claim.created", { event_id: eventId });
       return true;
     }
     return false;
