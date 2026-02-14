@@ -14,6 +14,7 @@
     "@std/async": "jsr:@std/async@^1.1.1",
     "@std/front-matter": "jsr:@std/front-matter@^1.0.9",
     "@std/path": "jsr:@std/path@^1",
+    "beautiful-mermaid": "npm:beautiful-mermaid",
     "zod": "npm:zod@^4.3"
   }
 }

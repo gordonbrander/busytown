@@ -2,6 +2,8 @@
 description: Implements code changes by following plans written by the plan agent
 listen:
   - "plan.created"
+emits:
+  - "code.review"
 allowed_tools:
   - "Read"
   - "Grep"
