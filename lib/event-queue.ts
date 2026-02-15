@@ -306,7 +306,7 @@ export const getOrCreateCursor = (
  * Claims an event for a worker (first-claim-wins).
  *
  * Uses INSERT OR IGNORE with the PRIMARY KEY constraint to ensure only the
- * first worker to claim an event succeeds. Emits a `sys.claim.created` event on success.
+ * first worker to claim an event succeeds. Emits a `sys.claim.create` event on success.
  *
  * @param db - Database connection
  * @param workerId - Worker ID attempting the claim
@@ -327,7 +327,7 @@ export const claimEvent = (
     const check = db.prepare("SELECT worker_id FROM claims WHERE event_id = ?");
     const row = check.get(eventId) as ClaimWorkerRow | undefined;
     if (row && row.worker_id === workerId) {
-      pushEvent(db, workerId, "sys.claim.created", { event_id: eventId });
+      pushEvent(db, workerId, "sys.claim.create", { event_id: eventId });
       return true;
     }
     return false;
