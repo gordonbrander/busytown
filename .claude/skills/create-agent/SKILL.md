@@ -190,12 +190,10 @@ first-claim-wins — only one worker can claim each event.
 
 ### Workflow
 
-1. **Claim events** — use `event-queue claim` to atomically take ownership of an
+1. **Claim events** — use `busytown events claim --worker <id:string> --event <id:string>` to atomically take ownership of an
    event
 2. **Handle claim failures** — if the claim response shows `claimed:false`,
    another worker already claimed it; move on
-3. **Listen for claim events** — subscribe to `claim.created` to react to new
-   claims
 
 ### Example Agent Using Claims
 

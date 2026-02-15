@@ -71,7 +71,7 @@ Event types use dot-separated namespaces: `entity.action`. Examples:
 - `code.review`
 - `review.created`
 - `file.create`, `file.modify`, `file.delete`, `file.rename`
-- `claim.created`, `cursor.create`
+- `sys.claim.created`, `sys.cursor.create`
 
 ### Core operations
 
@@ -89,7 +89,7 @@ cursor. For new workers, creates a cursor at the current tail so they only see
 future events (play-from-now semantics).
 
 **claimEvent(db, workerId, eventId)** — Uses `INSERT OR IGNORE` on the claims
-primary key. Only the first caller wins. Pushes a `claim.created` event on
+primary key. Only the first caller wins. Pushes a `sys.claim.created` event on
 success.
 
 ### Delivery guarantees
