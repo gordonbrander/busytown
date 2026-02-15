@@ -11,10 +11,6 @@
 import { relative } from "node:path";
 import { globToRegExp } from "@std/path";
 import { debounce } from "@std/async/debounce";
-import mainLogger from "./main-logger.ts";
-
-const logger = mainLogger.child({ subcomponent: "fs-watcher" });
-
 export const DEFAULT_EXCLUDES = [
   "**/.git/**",
   "**/node_modules/**",
@@ -61,10 +57,6 @@ export const watchFs = ({
   excludePaths: string[];
   callback: (paths: FsEvent) => void;
 }): Cleanup => {
-  logger.info("Watcher starting", {
-    paths,
-  });
-
   const allExcludes = [
     ...DEFAULT_EXCLUDES,
     ...excludePaths,

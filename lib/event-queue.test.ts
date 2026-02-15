@@ -7,6 +7,7 @@ import {
   getNextEvent,
   getOrCreateCursor,
   openDb,
+  pipeStreamToEvents,
   pollEvents,
   pushEvent,
   updateCursor,
@@ -491,7 +492,7 @@ Deno.test("getOrCreateCursor - pushes a sys.cursor.create event for new worker",
   assertEquals(events.length, 1);
   assertEquals(events[0].worker_id, "new-agent");
   assertEquals(
-    (events[0].payload as { agent_id: string }).agent_id,
+    (events[0].payload as { worker_id: string }).worker_id,
     "new-agent",
   );
   db.close();
@@ -519,5 +520,73 @@ Deno.test("getOrCreateCursor - new worker skips pre-existing events when used wi
   const events = getEventsSince(db, { sinceId: since });
   assertEquals(events.length, 1);
   assertEquals(events[0].type, "new.event");
+  db.close();
+});
+
+// --- pipeStreamToEvents ---
+
+/** Helper: create a ReadableStream from an array of strings encoded as UTF-8 chunks. */
+const streamFrom = (chunks: string[]): ReadableStream<Uint8Array> => {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  });
+};
+
+Deno.test("pipeStreamToEvents - pushes one event per line", async () => {
+  const db = freshDb();
+  const stream = streamFrom(["hello\nworld\n"]);
+
+  await pipeStreamToEvents(stream, db, "w1", "sys.worker.w1.stdout");
+
+  const events = getEventsSince(db, { filterType: "sys.worker.w1.stdout" });
+  assertEquals(events.length, 2);
+  assertEquals((events[0].payload as { line: string }).line, "hello");
+  assertEquals((events[1].payload as { line: string }).line, "world");
+  db.close();
+});
+
+Deno.test("pipeStreamToEvents - handles lines split across chunks", async () => {
+  const db = freshDb();
+  const stream = streamFrom(["hel", "lo\nwor", "ld\n"]);
+
+  await pipeStreamToEvents(stream, db, "w1", "sys.worker.w1.stdout");
+
+  const events = getEventsSince(db, { filterType: "sys.worker.w1.stdout" });
+  assertEquals(events.length, 2);
+  assertEquals((events[0].payload as { line: string }).line, "hello");
+  assertEquals((events[1].payload as { line: string }).line, "world");
+  db.close();
+});
+
+Deno.test("pipeStreamToEvents - empty stream produces no events", async () => {
+  const db = freshDb();
+  const stream = streamFrom([]);
+
+  await pipeStreamToEvents(stream, db, "w1", "sys.worker.w1.stdout");
+
+  const events = getEventsSince(db, { filterType: "sys.worker.w1.stdout" });
+  assertEquals(events.length, 0);
+  db.close();
+});
+
+Deno.test("pipeStreamToEvents - uses correct worker_id and event type", async () => {
+  const db = freshDb();
+  const stream = streamFrom(["line1\n"]);
+
+  await pipeStreamToEvents(stream, db, "agent-x", "sys.worker.agent-x.stderr");
+
+  const events = getEventsSince(db, {
+    filterType: "sys.worker.agent-x.stderr",
+  });
+  assertEquals(events.length, 1);
+  assertEquals(events[0].worker_id, "agent-x");
+  assertEquals(events[0].type, "sys.worker.agent-x.stderr");
+  assertEquals((events[0].payload as { line: string }).line, "line1");
   db.close();
 });
