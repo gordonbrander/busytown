@@ -15,7 +15,7 @@ event subscriptions.
 1. **Start the daemon** (runs in background with auto-restart):
 
    ```bash
-   deno task runner start
+   busytown start
    ```
 
    Other daemon commands: `stop`, `restart`, `status`
@@ -23,16 +23,16 @@ event subscriptions.
 2. **Push an event** to trigger agents:
 
    ```bash
-   deno task events push --worker user --type file.change --payload '{"path":"src/app.ts"}'
+   busytown events push --worker user --type file.change --payload '{"path":"src/app.ts"}'
    ```
 
-To run the agent runner in the foreground instead, use `deno task runner run`
+To run the agent runner in the foreground instead, use `busytown run`
 directly.
 
 ## runner CLI
 
 ```
-deno task runner <command> [options]
+busytown <command> [options]
 ```
 
 | Command   | Description                                   |
@@ -87,16 +87,16 @@ one worker can claim each event.
 
 ```bash
 # Claim event #1
-deno task events claim --worker agent-1 --event 1
+busytown events claim --worker agent-1 --event 1
 
 # Check who claimed an event
-deno task events check-claim --event 1
+busytown events check-claim --event 1
 ```
 
 See [Event Queue CLI](event-queue.md) for the full reference.
 
 ## Supporting Skills
 
-- `events` — a skill describing the underlying `deno task events` commands
+- `events` — a skill describing the underlying `busytown events` commands
   (`push`, `watch`, `since`, `list`, `cursor`, `claim`, `check-claim`)
 - `create-agent` — a skill for helping the user define new agent files

@@ -16,7 +16,7 @@ maintains its own cursor position, enabling reliable at-least-once delivery.
 Push an event to the queue.
 
 ```
-deno task events push --worker <id> --type <type> [--payload <json>]
+busytown events push --worker <id> --type <type> [--payload <json>]
 ```
 
 - `--type` is required
@@ -26,7 +26,7 @@ deno task events push --worker <id> --type <type> [--payload <json>]
 **Example:**
 
 ```bash
-deno task events push --worker agent-1 --type task.created --payload '{"name":"foo"}'
+busytown events push --worker agent-1 --type task.created --payload '{"name":"foo"}'
 # Output: {"id":1}
 ```
 
@@ -35,7 +35,7 @@ deno task events push --worker agent-1 --type task.created --payload '{"name":"f
 Poll for new events and stream ndjson to stdout.
 
 ```
-deno task events watch --worker <id> [--poll <seconds>] [--omit_worker <id>]
+busytown events watch --worker <id> [--poll <seconds>] [--omit_worker <id>]
 ```
 
 - Streams events as ndjson (one JSON object per line)
@@ -46,7 +46,7 @@ deno task events watch --worker <id> [--poll <seconds>] [--omit_worker <id>]
 **Example:**
 
 ```bash
-deno task events watch --worker agent-1 --poll 2
+busytown events watch --worker agent-1 --poll 2
 # Output (streaming):
 # {"id":1,"timestamp":1234567890,"type":"task.created","worker_id":"agent-2","payload":{"name":"foo"}}
 # {"id":2,"timestamp":1234567891,"type":"task.done","worker_id":"agent-2","payload":{}}
@@ -59,13 +59,13 @@ deno task events watch --worker agent-1 --poll 2
 Get the current cursor position for a worker.
 
 ```
-deno task events cursor --worker <id>
+busytown events cursor --worker <id>
 ```
 
 **Example:**
 
 ```bash
-deno task events cursor --worker agent-1
+busytown events cursor --worker agent-1
 # Output: {"worker_id":"agent-1","since":5}
 ```
 
@@ -74,7 +74,7 @@ deno task events cursor --worker agent-1
 Fetch events after a given ID. Outputs ndjson (one event per line).
 
 ```
-deno task events list [--since <id>] [--tail <n>] [--limit <n>] [--omit-worker <id>] [--worker <id>] [--type <type>]
+busytown events list [--since <id>] [--tail <n>] [--limit <n>] [--omit-worker <id>] [--worker <id>] [--type <type>]
 ```
 
 - `--since <id>` — event ID to start after (forward scan, ascending; default:
@@ -88,19 +88,19 @@ deno task events list [--since <id>] [--tail <n>] [--limit <n>] [--omit-worker <
 **Example:**
 
 ```bash
-deno task events list --since 0 --limit 10
+busytown events list --since 0 --limit 10
 # Output (one event per line):
 # {"id":1,"timestamp":1234567890,"type":"task.created","worker_id":"agent-1","payload":{}}
 # {"id":2,"timestamp":1234567891,"type":"task.done","worker_id":"agent-1","payload":{}}
 
 # Filter to a specific worker:
-deno task events list --since 0 --worker agent-1
+busytown events list --since 0 --worker agent-1
 
 # Filter by event type:
-deno task events list --since 0 --type task.created
+busytown events list --since 0 --type task.created
 
 # Show the last 5 events:
-deno task events list --tail 5
+busytown events list --tail 5
 ```
 
 ### set-cursor
@@ -108,13 +108,13 @@ deno task events list --tail 5
 Manually set the cursor position for a worker.
 
 ```
-deno task events set-cursor --worker <id> --set <event_id>
+busytown events set-cursor --worker <id> --set <event_id>
 ```
 
 **Example:**
 
 ```bash
-deno task events set-cursor --worker agent-1 --set 10
+busytown events set-cursor --worker agent-1 --set 10
 # Output: {"worker_id":"agent-1","since":10}
 ```
 
@@ -124,7 +124,7 @@ Claim an event (first-claim-wins). Claiming lets workers coordinate over who
 should claim an event.
 
 ```
-deno task events claim --worker <id> --event <id>
+busytown events claim --worker <id> --event <id>
 ```
 
 - Returns `{"claimed":true}` on success
@@ -133,10 +133,10 @@ deno task events claim --worker <id> --event <id>
 **Example:**
 
 ```bash
-deno task events claim --worker agent-1 --event 5
+busytown events claim --worker agent-1 --event 5
 # Output: {"claimed":true}
 
-deno task events claim --worker agent-2 --event 5
+busytown events claim --worker agent-2 --event 5
 # Output: {"claimed":false,"claimant":"agent-1"}
 ```
 
@@ -145,16 +145,16 @@ deno task events claim --worker agent-2 --event 5
 Check the claim status of an event.
 
 ```
-deno task events check-claim --event <id>
+busytown events check-claim --event <id>
 ```
 
 **Example:**
 
 ```bash
-deno task events check-claim --event 5
+busytown events check-claim --event 5
 # Output: {"event_id":5,"worker_id":"agent-1","claimed_at":1234567890}
 
-deno task events check-claim --event 99
+busytown events check-claim --event 99
 # Output: {"event_id":99,"claimed":false}
 ```
 
@@ -171,20 +171,20 @@ deno task events check-claim --event 99
 
 ```bash
 # Terminal 1: Watch for events
-deno task events watch --worker consumer --omit_worker consumer
+busytown events watch --worker consumer --omit_worker consumer
 
 # Terminal 2: Push events
-deno task events push --worker producer --type ping --payload '{"msg":"hello"}'
+busytown events push --worker producer --type ping --payload '{"msg":"hello"}'
 ```
 
 **Read all events from the beginning:**
 
 ```bash
-deno task events list --since 0
+busytown events list --since 0
 ```
 
 **Reset a worker's cursor to replay events:**
 
 ```bash
-deno task events set-cursor --worker agent-1 --set 0
+busytown events set-cursor --worker agent-1 --set 0
 ```
