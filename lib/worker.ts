@@ -92,6 +92,8 @@ export const createSystem = (
     if (!worker.hidden) {
       pushEvent(db, worker.id, `sys.worker.${worker.id}.start`, {
         event_id: event.id,
+        event_type: event.type,
+        worker_listen: worker.listen,
       });
     }
 
