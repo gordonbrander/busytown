@@ -19,6 +19,7 @@ import { DatabaseSync } from "node:sqlite";
 import { renderTemplate } from "./template.ts";
 import { createSystem, worker } from "./worker.ts";
 import { forever } from "./utils.ts";
+import { toSlug } from "./slug.ts";
 
 const logger = createLogger({ source: "runner" });
 
@@ -89,10 +90,16 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const raw = await Deno.readTextFile(filePath);
   const { attrs, body } = extractYaml(raw);
   const frontmatter = AgentFrontmatterSchema.parse(attrs);
+  const id = toSlug(basename(filePath, ".md"));
+
+  if (id == undefined) {
+    throw new Error(`Could not transform filename to slug: ${filePath}`);
+  }
+
   switch (frontmatter.type) {
     case "claude":
       return {
-        id: basename(filePath, ".md"),
+        id,
         type: "claude",
         description: frontmatter.description,
         listen: frontmatter.listen,
@@ -105,7 +112,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
       };
     case "shell":
       return {
-        id: basename(filePath, ".md"),
+        id,
         type: frontmatter.type,
         description: frontmatter.description,
         listen: frontmatter.listen,
