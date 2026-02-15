@@ -386,25 +386,25 @@ Deno.test("claimEvent - same worker claiming twice succeeds", () => {
   db.close();
 });
 
-Deno.test("claimEvent - emits sys.claim.created event on success", () => {
+Deno.test("claimEvent - emits sys.claim.create event on success", () => {
   const db = freshDb();
   const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
 
-  const events = getEventsSince(db, { filterType: "sys.claim.created" });
+  const events = getEventsSince(db, { filterType: "sys.claim.create" });
   assertEquals(events.length, 1);
   assertEquals((events[0].payload as { event_id: number }).event_id, eventId);
   assertEquals(events[0].worker_id, "claimer1");
   db.close();
 });
 
-Deno.test("claimEvent - does not emit sys.claim.created on failure", () => {
+Deno.test("claimEvent - does not emit sys.claim.create on failure", () => {
   const db = freshDb();
   const { id: eventId } = pushEvent(db, "w1", "task");
   claimEvent(db, "claimer1", eventId);
   claimEvent(db, "claimer2", eventId);
 
-  const events = getEventsSince(db, { filterType: "sys.claim.created" });
+  const events = getEventsSince(db, { filterType: "sys.claim.create" });
   assertEquals(events.length, 1); // only the first claim emitted an event
   db.close();
 });
