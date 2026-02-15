@@ -93,7 +93,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const id = toSlug(basename(filePath, ".md"));
 
   if (id == undefined) {
-    throw new Error(`Could not transform filename to slug: ${filePath}`);
+    throw new Error(`Could not transform filename to id: ${filePath}`);
   }
 
   switch (frontmatter.type) {

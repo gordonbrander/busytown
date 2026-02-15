@@ -1,60 +1,60 @@
 import { assertEquals } from "@std/assert";
 import { toSlug } from "./slug.ts";
 
-// --- sanitizeId ---
+// --- toSlug ---
 
-Deno.test("sanitizeId - lowercase passthrough", () => {
+Deno.test("toSlug - lowercase passthrough", () => {
   assertEquals(toSlug("review"), "review");
 });
 
-Deno.test("sanitizeId - already kebab-case is unchanged", () => {
+Deno.test("toSlug - already kebab-case is unchanged", () => {
   assertEquals(toSlug("idea-collider"), "idea-collider");
 });
 
-Deno.test("sanitizeId - spaces become hyphens", () => {
+Deno.test("toSlug - spaces become hyphens", () => {
   assertEquals(toSlug("my agent"), "my-agent");
 });
 
-Deno.test("sanitizeId - multiple spaces collapse to single hyphen", () => {
+Deno.test("toSlug - multiple spaces collapse to single hyphen", () => {
   assertEquals(toSlug("my   agent"), "my-agent");
 });
 
-Deno.test("sanitizeId - special characters are stripped", () => {
+Deno.test("toSlug - special characters are stripped", () => {
   assertEquals(toSlug("my@agent!"), "myagent");
 });
 
-Deno.test("sanitizeId - dots are stripped", () => {
+Deno.test("toSlug - dots are stripped", () => {
   assertEquals(toSlug("my.agent"), "myagent");
 });
 
-Deno.test("sanitizeId - underscores are preserved", () => {
+Deno.test("toSlug - underscores are preserved", () => {
   assertEquals(toSlug("my_agent"), "my_agent");
 });
 
-Deno.test("sanitizeId - leading and trailing spaces are trimmed", () => {
+Deno.test("toSlug - leading and trailing spaces are trimmed", () => {
   assertEquals(toSlug("  agent  "), "agent");
 });
 
-Deno.test("sanitizeId - uppercase is lowercased", () => {
+Deno.test("toSlug - uppercase is lowercased", () => {
   assertEquals(toSlug("AGENT"), "agent");
 });
 
-Deno.test("sanitizeId - numbers are preserved", () => {
+Deno.test("toSlug - numbers are preserved", () => {
   assertEquals(toSlug("agent123"), "agent123");
 });
 
-Deno.test("sanitizeId - empty string returns undefined", () => {
+Deno.test("toSlug - empty string returns undefined", () => {
   assertEquals(toSlug(""), undefined);
 });
 
-Deno.test("sanitizeId - all special chars returns undefined", () => {
+Deno.test("toSlug - all special chars returns undefined", () => {
   assertEquals(toSlug("@#$%"), undefined);
 });
 
-Deno.test("sanitizeId - mixed camelCase with hyphens", () => {
+Deno.test("toSlug - mixed camelCase with hyphens", () => {
   assertEquals(toSlug("myAgent-worker"), "myagent-worker");
 });
 
-Deno.test("sanitizeId - tabs and newlines become hyphens", () => {
+Deno.test("toSlug - tabs and newlines become hyphens", () => {
   assertEquals(toSlug("my\tagent\nworker"), "my-agent-worker");
 });
