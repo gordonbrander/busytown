@@ -320,7 +320,6 @@ export const runMain = async (
   }: RunnerConfig,
 ): Promise<void> => {
   const db = openDb(dbPath);
-
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
   const system = createSystem(db, pollIntervalMs);
