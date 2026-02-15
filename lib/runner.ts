@@ -12,15 +12,15 @@ import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
 import { basename, join, resolve } from "node:path";
 import type { Event } from "./event.ts";
-import { openDb, pushEvent } from "./event-queue.ts";
+import { openDb, pipeStreamToEvents, pushEvent } from "./event-queue.ts";
 import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
-import mainLogger from "./main-logger.ts";
-import { pipeStreamToFile } from "./stream.ts";
+import { create as createLogger } from "./logger.ts";
+import { DatabaseSync } from "node:sqlite";
 import { renderTemplate } from "./template.ts";
 import { createSystem, worker } from "./worker.ts";
 import { forever } from "./utils.ts";
 
-const logger = mainLogger.child({ component: "runner" });
+const logger = createLogger({ source: "runner" });
 
 /**
  * Validates YAML frontmatter attributes from agent markdown files.
@@ -129,12 +129,18 @@ export async function* loadAllAgents(
       try {
         yield await loadAgentDef(join(agentsDir, entry.name));
       } catch (err) {
-        logger.error("Failed to load agent", { file: entry.name, error: err });
+        logger.error("Failed to load agent", {
+          agent_id: entry.name,
+          error: String(err),
+        });
       }
     }
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) {
-      logger.warn("Agents directory not found", { agentsDir });
+      logger.error("Agents directory not found", {
+        dir: agentsDir,
+        error: String(err),
+      });
       return;
     }
     throw err;
@@ -192,19 +198,11 @@ export const runClaudeAgent = async (
   event: Event,
   dbPath: string,
   projectRoot: string,
+  db: DatabaseSync,
 ): Promise<number> => {
   const systemPrompt = buildSystemPrompt(agent, dbPath);
   const userMessage = JSON.stringify(event);
   const toolArgs = buildToolArgs(agent.allowedTools);
-
-  const logsDir = join(projectRoot, "logs");
-  await Deno.mkdir(logsDir, { recursive: true });
-  const logPath = join(logsDir, `${agent.id}.log`);
-  const logFile = await Deno.open(logPath, {
-    write: true,
-    create: true,
-    append: true,
-  });
 
   const cmd = new Deno.Command("claude", {
     args: [
@@ -229,12 +227,21 @@ export const runClaudeAgent = async (
   await writer.write(textEncoder.encode(userMessage));
   await writer.close();
 
-  const stdoutPipe = pipeStreamToFile(process.stdout, logFile);
-  const stderrPipe = pipeStreamToFile(process.stderr, logFile);
+  const stdoutPipe = pipeStreamToEvents(
+    process.stdout,
+    db,
+    agent.id,
+    `sys.worker.${agent.id}.stdout`,
+  );
+  const stderrPipe = pipeStreamToEvents(
+    process.stderr,
+    db,
+    agent.id,
+    `sys.worker.${agent.id}.stderr`,
+  );
 
   const { code } = await process.status;
   await Promise.all([stdoutPipe, stderrPipe]);
-  logFile.close();
 
   return code;
 };
@@ -244,18 +251,10 @@ export const runShellAgent = async (
   agent: ShellAgentDef,
   event: Event,
   projectRoot: string,
+  db: DatabaseSync,
 ): Promise<number> => {
   const context = { event };
   const command = renderTemplate(agent.body, context);
-
-  const logsDir = join(projectRoot, "logs");
-  await Deno.mkdir(logsDir, { recursive: true });
-  const logPath = join(logsDir, `${agent.id}.log`);
-  const logFile = await Deno.open(logPath, {
-    write: true,
-    create: true,
-    append: true,
-  });
 
   const cmd = new Deno.Command("sh", {
     args: ["-c", command],
@@ -266,12 +265,21 @@ export const runShellAgent = async (
 
   const process = cmd.spawn();
 
-  const stdoutPipe = pipeStreamToFile(process.stdout, logFile);
-  const stderrPipe = pipeStreamToFile(process.stderr, logFile);
+  const stdoutPipe = pipeStreamToEvents(
+    process.stdout,
+    db,
+    agent.id,
+    `sys.worker.${agent.id}.stdout`,
+  );
+  const stderrPipe = pipeStreamToEvents(
+    process.stderr,
+    db,
+    agent.id,
+    `sys.worker.${agent.id}.stderr`,
+  );
 
   const { code } = await process.status;
   await Promise.all([stdoutPipe, stderrPipe]);
-  logFile.close();
 
   return code;
 };
@@ -311,15 +319,9 @@ export const runMain = async (
     excludePaths,
   }: RunnerConfig,
 ): Promise<void> => {
-  logger.info("Starting", {
-    db: dbPath,
-    interval_ms: pollIntervalMs,
-  });
-
   const db = openDb(dbPath);
   const projectRoot = resolve(agentCwd ?? Deno.cwd());
   const agents = await Array.fromAsync(loadAllAgents(agentsDir));
-
   const system = createSystem(db, pollIntervalMs);
 
   // Spawn stdout event worker
@@ -344,10 +346,10 @@ export const runMain = async (
         run: async (event) => {
           switch (agent.type) {
             case "shell":
-              await runShellAgent(agent, event, projectRoot);
+              await runShellAgent(agent, event, projectRoot, db);
               return;
             case "claude":
-              await runClaudeAgent(agent, event, dbPath, projectRoot);
+              await runClaudeAgent(agent, event, dbPath, projectRoot, db);
               return;
             default:
               throw new Error(`Unknown agent type`);

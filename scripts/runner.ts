@@ -7,24 +7,22 @@
 import { Command } from "@cliffy/command";
 import { runMain } from "../lib/runner.ts";
 import { shellEscape } from "../lib/shell.ts";
-import mainLogger from "../lib/main-logger.ts";
+import { create as createLogger } from "../lib/logger.ts";
 
-const logger = mainLogger.child({ component: "daemon" });
-
-// --- Constants ---
+const logger = createLogger({ source: "runner-cli" });
 
 const PID_FILE = ".runner.pid";
 const LOG_FILE = ".daemon-stderr.log";
 
 // --- Utility functions ---
 
-async function readPid(): Promise<number | null> {
+async function readPid(): Promise<number | undefined> {
   try {
     const text = await Deno.readTextFile(PID_FILE);
     const pid = parseInt(text.trim(), 10);
-    return Number.isNaN(pid) ? null : pid;
+    return Number.isNaN(pid) ? undefined : pid;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -55,12 +53,12 @@ async function isAlive(pid: number): Promise<boolean> {
 }
 
 /** Read PID file and check if process is alive. Cleans stale PID file. */
-async function getRunningPid(): Promise<number | null> {
+async function getRunningPid(): Promise<number | undefined> {
   const pid = await readPid();
-  if (pid === null) return null;
+  if (pid == undefined) return undefined;
   if (await isAlive(pid)) return pid;
   await removePid();
-  return null;
+  return undefined;
 }
 
 async function killProcessTree(pid: number): Promise<void> {
@@ -144,7 +142,9 @@ function commandWithRunnerOptions(
 async function startDaemon(options: RunnerOptions): Promise<void> {
   const existing = await getRunningPid();
   if (existing !== null) {
-    logger.error("Daemon already running", { pid: existing });
+    logger.error("Daemon already running", {
+      pid: existing,
+    });
     Deno.exit(1);
   }
 
@@ -162,7 +162,7 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
   const allArgs = [...denoArgs, ...runnerArgs];
   const shellCmd = "exec deno " + allArgs.map(shellEscape).join(" ");
 
-  logger.info("Daemon starting...");
+  logger.debug("Daemon starting...");
   const child = new Deno.Command("sh", {
     args: ["-c", shellCmd + " >> " + shellEscape(LOG_FILE) + " 2>&1"],
     stdin: "null",
@@ -172,21 +172,21 @@ async function startDaemon(options: RunnerOptions): Promise<void> {
   child.unref();
 
   await writePid(child.pid);
-  logger.info("Daemon started", { pid: child.pid, log_file: LOG_FILE });
+  console.log("Daemon started", { pid: child.pid, log_file: LOG_FILE });
 }
 
 async function stopDaemon(): Promise<void> {
   const pid = await getRunningPid();
-  if (pid === null) {
-    logger.info("Daemon not running");
+  if (pid == undefined) {
+    logger.error("Daemon not running");
     await removePid();
     return;
   }
 
-  logger.info("Daemon stopping...", { pid });
+  logger.debug("Daemon stopping...", { pid });
   await killProcessTree(pid);
   await removePid();
-  logger.info("Daemon stopped");
+  logger.debug("Daemon stopped...", { pid });
 }
 
 // --- Exported command factories ---
@@ -252,7 +252,7 @@ export function daemonCommand(defaultAgentsDir = "agents/") {
   ).hidden().action(async (options) => {
     // Auto-restart loop
     while (true) {
-      logger.info("Daemon starting");
+      logger.debug("Daemon starting...");
       try {
         await runMain({
           agentsDir: options.agentsDir,
@@ -265,7 +265,7 @@ export function daemonCommand(defaultAgentsDir = "agents/") {
       } catch (err) {
         logger.error("Daemon error", { error: String(err) });
       }
-      logger.info("Daemon restarting...");
+      logger.debug("Daemon restarting...");
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   });

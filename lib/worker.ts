@@ -8,8 +8,6 @@ import {
 } from "./event-queue.ts";
 import { type Event, eventMatches } from "./event.ts";
 import { abortableSleep, nextTick } from "./utils.ts";
-import mainLogger from "./main-logger.ts";
-
 export type EffectContext = {
   abortSignal: AbortSignal;
 };
@@ -61,8 +59,6 @@ export type WorkerSystem = {
   stop: () => Promise<void>;
 };
 
-const logger = mainLogger.child({ source: "runner" });
-
 export const createSystem = (
   db: DatabaseSync,
   timeout = 1000,
@@ -93,10 +89,12 @@ export const createSystem = (
     event: Event,
     abortSignal: AbortSignal,
   ): Promise<void> => {
-    logger.debug("Effect start", { workerId: worker.id });
-
     if (!worker.hidden) {
-      pushEvent(db, worker.id, "sys.worker.start", { eventId: event.id });
+      pushEvent(db, worker.id, `sys.worker.${worker.id}.start`, {
+        event_id: event.id,
+        event_type: event.type,
+        worker_listen: worker.listen,
+      });
     }
 
     // Get promise for eventual result of effect and track it.
@@ -109,25 +107,16 @@ export const createSystem = (
     runningEffects.delete(effectResultPromise);
 
     if (!res.ok) {
-      logger.error("Effect error", {
-        workerId: worker.id,
-        eventId: event.id,
-        error: `${res.error}`,
-      });
       if (!worker.hidden) {
-        pushEvent(db, worker.id, "sys.worker.error", {
-          eventId: event.id,
+        pushEvent(db, worker.id, `sys.worker.${worker.id}.error`, {
+          event_id: event.id,
           error: `${res.error}`,
         });
       }
     } else {
-      logger.debug("Effect finish", {
-        workerId: worker.id,
-        eventId: event.id,
-      });
       if (!worker.hidden) {
-        pushEvent(db, worker.id, "sys.worker.finish", {
-          eventId: event.id,
+        pushEvent(db, worker.id, `sys.worker.${worker.id}.finish`, {
+          event_id: event.id,
         });
       }
     }
@@ -158,11 +147,6 @@ export const createSystem = (
       }
 
       if (eventMatches(event, worker.listen)) {
-        logger.debug("Dispatching event", {
-          workerId: worker.id,
-          workerListen: worker.listen,
-          event,
-        });
         await manageEffect(worker, event, abortSignal);
       }
 

@@ -13,10 +13,8 @@
 
 import { z } from "zod/v4";
 import { DatabaseSync } from "node:sqlite";
+import { TextLineStream } from "@std/streams";
 import type { Event, RawEventRow } from "./event.ts";
-import mainLogger from "./main-logger.ts";
-
-const logger = mainLogger.child({ component: "event-queue" });
 
 // Local Zod schemas for ad-hoc row shapes returned by SQL queries
 const InsertReturningRowSchema = z.object({
@@ -48,7 +46,6 @@ type ClaimDetailRow = z.infer<typeof ClaimDetailRowSchema>;
  * @returns The opened database connection
  */
 export const openDb = (path: string): DatabaseSync => {
-  logger.info("Opening database", { db: path });
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
@@ -131,7 +128,6 @@ export const pushEvent = (
     timestamp,
   };
 
-  logger.info("Event pushed", { event });
   return event;
 };
 
@@ -295,7 +291,7 @@ export const getOrCreateCursor = (
     ).get(workerId) as CursorRow | undefined;
     if (existing) return existing.since;
     const event = pushEvent(db, workerId, "sys.cursor.create", {
-      agent_id: workerId,
+      worker_id: workerId,
     });
     updateCursor(db, workerId, event.id);
     return event.id;
@@ -318,7 +314,6 @@ export const claimEvent = (
   workerId: string,
   eventId: number,
 ): boolean => {
-  logger.info("Claiming event", { eventId, workerId });
   return transaction(db, () => {
     const insert = db.prepare(
       "INSERT OR IGNORE INTO claims (event_id, worker_id) VALUES (?, ?)",
@@ -349,4 +344,19 @@ export const getClaimant = (
     "SELECT worker_id, claimed_at FROM claims WHERE event_id = ?",
   );
   return stmt.get(eventId) as ClaimDetailRow | undefined;
+};
+
+/** Pipe a byte stream line-by-line into the event queue. */
+export const pipeStreamToEvents = async (
+  stream: ReadableStream<Uint8Array>,
+  db: DatabaseSync,
+  workerId: string,
+  eventType: string,
+): Promise<void> => {
+  const lines = stream
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new TextLineStream());
+  for await (const line of lines) {
+    pushEvent(db, workerId, eventType, { line });
+  }
 };
