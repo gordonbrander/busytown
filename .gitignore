@@ -4,3 +4,4 @@ scratch/
 *.log
 *.pid
 events.db*
+.claude/plans/
