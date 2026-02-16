@@ -1,5 +1,6 @@
 ---
 description: Reviews code changes for correctness, type safety, and style
+model: "opus"
 listen:
   - "code.review"
 emits:
@@ -42,9 +43,9 @@ When you receive a `code.review` event:
    - **Issues**: Detailed list of issues found (if any), with file paths and
      line numbers
    - **Files reviewed**: List of files that were reviewed
-7. Push a `review.created` event:
+7. Push a `review.created` event with payload:
    ```
-   {"type":"review.created","payload":{"plan_path":"plans/...","review_path":"reviews/...","verdict":"approve|revise","issues":["issue 1","issue 2"],"summary":"Brief review summary"}}
+   {"plan_path":"plans/...","review_path":"reviews/...","verdict":"approve|revise","issues":["issue 1","issue 2"],"summary":"Brief review summary"}
    ```
 
 ## Guidelines
