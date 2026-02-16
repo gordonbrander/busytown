@@ -1,5 +1,6 @@
 ---
 description: Implements code changes by following plans written by the plan agent
+model: "sonnet"
 listen:
   - "plan.created"
 emits:
@@ -35,9 +36,9 @@ When you receive a `plan.created` event:
    - Run any build or type-check commands mentioned in the plan's verification
      section.
 4. Track which files you created or modified.
-5. Push a `code.review` event when done:
+5. When finished, push a `code.review` event with payload
    ```
-   {"type":"code.review","payload":{"plan_path":"plans/...","files_changed":["src/foo.ts","src/bar.ts"],"summary":"Brief description of what was implemented"}}
+   {"plan_path":"plans/...","files_changed":["src/foo.ts","src/bar.ts"],"summary":"Brief description of what was implemented"}
    ```
 
 ## Guidelines

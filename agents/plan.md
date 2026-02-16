@@ -1,5 +1,6 @@
 ---
 description: Explores the codebase and writes implementation plans as markdown files
+model: "opus"
 listen:
   - "plan.request"
   - "review.created"
@@ -36,9 +37,9 @@ When you receive a `plan.request` event:
    - **Steps**: Numbered, actionable implementation steps with specific file
      paths and code changes
    - **Verification**: How to confirm the implementation is correct
-5. Push a `plan.created` event:
+5. Push a `plan.created` event with the payload:
    ```
-   {"type":"plan.created","payload":{"plan_path":"plans/<name>.md"}}
+   {"plan_path":"plans/<name>.md"}
    ```
 
 ## Handling `review.created` events
@@ -46,9 +47,9 @@ When you receive a `plan.request` event:
 When you receive a `review.created` event:
 
 1. Read the `payload.verdict` field:
-   - If `"approve"`: push a `plan.complete` event and stop.
+   - If `"approve"`: push a `plan.complete` event and stop. Payload:
      ```
-     {"type":"plan.complete","payload":{"plan_path":"plans/..."}}
+     {"plan_path":"plans/..."}
      ```
    - If `"revise"`: continue to step 2.
 2. Read the review file at `payload.review_path` for detailed feedback. Also
