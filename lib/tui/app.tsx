@@ -3,17 +3,11 @@
  * @module tui/app
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useReducer } from "react";
 import { Box, useApp, useInput, useStdout } from "ink";
 import type { DatabaseSync } from "node:sqlite";
-import {
-  useAgentStates,
-  useClaims,
-  useFileEvents,
-  usePollEvents,
-  useStats,
-} from "./use-data.ts";
-import { useDaemonStatus } from "./use-daemon-status.ts";
+import { type DispatchRef, initialState, tuiReducer } from "./state.ts";
+import { getRunningPid } from "../pid.ts";
 import { AgentsPanel } from "./components/agents-panel.tsx";
 import { EventStreamPanel } from "./components/event-stream-panel.tsx";
 import { FilesPanel } from "./components/files-panel.tsx";
@@ -21,67 +15,130 @@ import { ClaimsPanel } from "./components/claims-panel.tsx";
 import { StatsPanel } from "./components/stats-panel.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
 
-export interface AppProps {
+export type AppProps = {
   db: DatabaseSync;
   agentIds: string[];
-  pollIntervalMs: number;
-}
+  dispatchRef: DispatchRef;
+};
 
-export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
+export const App: React.FC<AppProps> = ({ db, agentIds, dispatchRef }) => {
   const { exit } = useApp();
+  const [state, dispatch] = useReducer(tuiReducer, agentIds, initialState);
 
-  // Data hooks
-  const events = usePollEvents(db, pollIntervalMs);
-  const agentStates = useAgentStates(events, agentIds);
-  const fileEvents = useFileEvents(events);
-  const daemon = useDaemonStatus();
-  const stats = useStats(db, events, pollIntervalMs * 2);
+  // Connect dispatch to the worker bridge
+  useEffect(() => {
+    dispatchRef.current = dispatch;
+    return () => {
+      dispatchRef.current = null;
+    };
+  }, [dispatch, dispatchRef]);
 
-  // Derive active event IDs from agent states
-  const activeEventIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const state of agentStates.values()) {
-      if (state.eventId && state.state === "processing") {
-        ids.add(state.eventId);
+  // Clock poll (1s) — timer-based concerns only
+  useEffect(() => {
+    let daemonStartTime: number | undefined;
+    let wasRunning = false;
+
+    const clock = setInterval(async () => {
+      dispatch({ type: "TICK" });
+
+      try {
+        // Daemon status
+        const pid = await getRunningPid();
+        if (pid) {
+          if (!wasRunning) daemonStartTime = Date.now();
+          wasRunning = true;
+          const uptime = daemonStartTime
+            ? Math.floor((Date.now() - daemonStartTime) / 1000)
+            : 0;
+          dispatch({ type: "DAEMON_STATUS", status: { running: true, pid, uptime } });
+        } else {
+          if (wasRunning) daemonStartTime = undefined;
+          wasRunning = false;
+          dispatch({ type: "DAEMON_STATUS", status: { running: false } });
+        }
+
+        // Stats (cheap DB counts)
+        const eventRow = db
+          .prepare("SELECT COUNT(*) as count FROM events")
+          .get() as { count: number } | undefined;
+        const workerRow = db
+          .prepare("SELECT COUNT(*) as count FROM worker_cursors")
+          .get() as { count: number } | undefined;
+        dispatch({
+          type: "STATS_RECEIVED",
+          eventCount: eventRow?.count ?? 0,
+          workerCount: workerRow?.count ?? 0,
+        });
+      } catch {
+        // PID check or DB query failed — leave state unchanged
+      }
+    }, 1000);
+
+    return () => clearInterval(clock);
+  }, [db, dispatch]);
+
+  // Indicator animation effects — watch for transient states, dispatch transitions
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    for (const [agentId, agent] of state.agentStates) {
+      if (agent.indicatorState === "received") {
+        timers.push(
+          setTimeout(
+            () =>
+              dispatch({
+                type: "INDICATOR_TRANSITION",
+                agentId,
+                from: "received",
+                to: "processing",
+              }),
+            200,
+          ),
+        );
+      } else if (agent.indicatorState === "pushed") {
+        const revertTo = agent.state === "processing" ? "processing" : "idle";
+        timers.push(
+          setTimeout(
+            () =>
+              dispatch({
+                type: "INDICATOR_TRANSITION",
+                agentId,
+                from: "pushed",
+                to: revertTo,
+              }),
+            300,
+          ),
+        );
       }
     }
-    return ids;
-  }, [agentStates]);
 
-  const claims = useClaims(db, activeEventIds, pollIntervalMs);
-
-  // Terminal dimensions
-  const { stdout } = useStdout();
-  const rows = stdout?.rows ?? 24; // Default to 24 if not available
-  // Reserve 1 row for status bar, 2 rows for event stream panel border
-  const eventStreamRows = Math.max(5, rows - 3);
-
-  // UI state
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [showSystemEvents, setShowSystemEvents] = useState(false);
-  const [focusedPanel, setFocusedPanel] = useState<"agents" | "events">(
-    "events",
-  );
+    return () => timers.forEach(clearTimeout);
+  }, [state.agentStates]);
 
   // Keyboard input handling
   useInput((input, key) => {
     if (input === "q") {
       exit();
     } else if (input === "j" || key.downArrow) {
-      setScrollOffset((o) => o + 1);
+      dispatch({ type: "SCROLL", delta: 1 });
     } else if (input === "k" || key.upArrow) {
-      setScrollOffset((o) => Math.max(0, o - 1));
+      dispatch({ type: "SCROLL", delta: -1 });
     } else if (input === "s") {
-      setShowSystemEvents((s) => !s);
+      dispatch({ type: "TOGGLE_SYSTEM_EVENTS" });
     } else if (key.tab) {
-      setFocusedPanel((p) => p === "agents" ? "events" : "agents");
+      dispatch({ type: "TOGGLE_FOCUS" });
     }
   });
 
-  // Convert agent states map to array for rendering
-  const agentsArray = useMemo(() => {
-    return Array.from(agentStates.values());
-  }, [agentStates]);
+  // Terminal dimensions
+  const { stdout } = useStdout();
+  const rows = stdout?.rows ?? 24;
+  const eventStreamRows = Math.max(5, rows - 3);
+
+  const agentsArray = useMemo(
+    () => Array.from(state.agentStates.values()),
+    [state.agentStates],
+  );
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -89,25 +146,25 @@ export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
         {/* Left column - fixed 34 chars width */}
         <Box flexDirection="column" width={34}>
           <AgentsPanel agents={agentsArray} />
-          <FilesPanel fileEvents={fileEvents} />
-          <ClaimsPanel claims={claims} />
-          <StatsPanel stats={stats} />
+          <FilesPanel fileEvents={state.fileEvents} />
+          <ClaimsPanel claims={state.claims} />
+          <StatsPanel stats={state.stats} />
         </Box>
         {/* Right column - fills remaining */}
         <Box flexDirection="column" flexGrow={1}>
           <EventStreamPanel
-            events={events}
-            scrollOffset={scrollOffset}
-            showSystemEvents={showSystemEvents}
-            focused={focusedPanel === "events"}
+            events={state.events}
+            scrollOffset={state.scrollOffset}
+            showSystemEvents={state.showSystemEvents}
+            focused={state.focusedPanel === "events"}
             visibleRows={eventStreamRows}
           />
         </Box>
       </Box>
       <StatusBar
-        daemonRunning={daemon.running}
-        uptime={daemon.uptime}
-        showSystemEvents={showSystemEvents}
+        daemonRunning={state.daemon.running}
+        uptime={state.daemon.uptime}
+        showSystemEvents={state.showSystemEvents}
       />
     </Box>
   );

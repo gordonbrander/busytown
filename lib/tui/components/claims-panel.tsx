@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Box, Text } from "ink";
-import type { Claim } from "../use-data.ts";
+import type { Claim } from "../state.ts";
 
 export interface ClaimsPanelProps {
   claims: Claim[];

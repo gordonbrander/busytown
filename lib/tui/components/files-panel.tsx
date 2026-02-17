@@ -6,7 +6,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { ForegroundColorName } from "chalk";
-import type { FileEvent } from "../use-data.ts";
+import type { FileEvent } from "../state.ts";
 import { fileOpChar, formatRelativeTime, truncatePath } from "../format.ts";
 
 export interface FilesPanelProps {

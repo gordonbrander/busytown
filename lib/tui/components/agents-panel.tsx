@@ -3,27 +3,17 @@
  * @module tui/components/agents-panel
  */
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Box, Text } from "ink";
 import type { ForegroundColorName } from "chalk";
-import type { AgentState } from "../use-data.ts";
+import type { AgentState } from "../state.ts";
 import { activityChar } from "../format.ts";
 
-export interface AgentsPanelProps {
+export type AgentsPanelProps = {
   agents: AgentState[];
-}
+};
 
 export const AgentsPanel: React.FC<AgentsPanelProps> = ({ agents }) => {
-  // Track duration for processing agents
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTick((t) => t + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>

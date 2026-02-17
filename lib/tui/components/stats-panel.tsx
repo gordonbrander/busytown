@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Box, Text } from "ink";
-import type { Stats } from "../use-data.ts";
+import type { Stats } from "../state.ts";
 
 export interface StatsPanelProps {
   stats: Stats;
