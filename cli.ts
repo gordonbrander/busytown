@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env
 /**
  * Unified CLI entrypoint for busytown.
  *
@@ -19,6 +19,7 @@ import {
   statusCommand,
   stopCommand,
 } from "./scripts/runner.ts";
+import { dashboardCommand } from "./scripts/dashboard.ts";
 import { openDb, pushEvent } from "./lib/event-queue.ts";
 
 await new Command()
@@ -32,6 +33,7 @@ await new Command()
   .command("_daemon", daemonCommand())
   .command("events", eventsCommand)
   .command("map", mapCommand())
+  .command("dashboard", dashboardCommand())
   .command("plan")
   .description("Push a plan.request event for a PRD file.")
   .option("--db <path:string>", "Database path", { default: "events.db" })
