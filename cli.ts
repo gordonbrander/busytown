@@ -20,6 +20,7 @@ import {
   stopCommand,
 } from "./scripts/runner.ts";
 import { dashboardCommand } from "./scripts/dashboard.ts";
+import { mcpServerCommand } from "./scripts/mcp-server.ts";
 import { openDb, pushEvent } from "./lib/event-queue.ts";
 
 await new Command()
@@ -34,6 +35,7 @@ await new Command()
   .command("events", eventsCommand)
   .command("map", mapCommand())
   .command("dashboard", dashboardCommand())
+  .command("mcp-server", mcpServerCommand)
   .command("plan")
   .description("Push a plan.request event for a PRD file.")
   .option("--db <path:string>", "Database path", { default: "events.db" })

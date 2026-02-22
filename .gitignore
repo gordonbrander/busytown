@@ -5,3 +5,4 @@ scratch/
 *.pid
 events.db*
 .claude/plans/
+.busytown/

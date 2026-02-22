@@ -13,6 +13,7 @@ import type { Event } from "./event.ts";
 import { openDb, pipeStreamToEvents, pushEvent } from "./event-queue.ts";
 import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import { DatabaseSync } from "node:sqlite";
+import { MCP_TOOL_NAME, writeMcpConfig } from "./mcp/config.ts";
 import { renderTemplate } from "./template.ts";
 import { createSystem, type Worker, worker } from "./worker.ts";
 import { forever } from "./utils.ts";
@@ -90,6 +91,23 @@ export const runClaudeAgent = async (
   const userMessage = JSON.stringify(event);
   const toolArgs = buildToolArgs(agent.allowedTools);
 
+  // When the agent has a restricted tool allowlist, set up the MCP permission
+  // server so Claude Code can ask the user for approval via the TUI.
+  const mcpArgs: string[] = [];
+  if (!agent.allowedTools.includes("*")) {
+    const mcpConfigPath = await writeMcpConfig({
+      dbPath: resolve(dbPath),
+      agentId: agent.id,
+      projectRoot,
+    });
+    mcpArgs.push(
+      "--mcp-config",
+      mcpConfigPath,
+      "--permission-prompt-tool",
+      MCP_TOOL_NAME,
+    );
+  }
+
   const cmd = new Deno.Command("claude", {
     args: [
       "--print",
@@ -99,6 +117,7 @@ export const runClaudeAgent = async (
       "--output-format",
       "stream-json",
       ...toolArgs,
+      ...mcpArgs,
       ...(agent.model ? ["--model", agent.model] : []),
       ...(agent.effort ? ["--effort", agent.effort] : []),
     ],

@@ -20,6 +20,7 @@
     "ink": "npm:ink@5",
     "ink-use-stdout-dimensions": "npm:ink-use-stdout-dimensions@^1.0.5",
     "react": "npm:react@^18.3.1",
-    "zod": "npm:zod@^4.3"
+    "zod": "npm:zod@^4.3",
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.27"
   }
 }

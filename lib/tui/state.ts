@@ -5,6 +5,10 @@
 
 import type { Event } from "../event.ts";
 import type { IndicatorState } from "./format.ts";
+import {
+  PermissionRequestPayloadSchema,
+  PermissionResponsePayloadSchema,
+} from "../mcp/permission.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,12 +39,23 @@ export type Stats = {
   errorCount: number;
 };
 
+export type PermissionRequest = {
+  requestId: string;
+  agentId: string;
+  toolName: string;
+  toolInput: unknown;
+  timestamp: number;
+  eventId: number;
+};
+
 export type TuiState = {
   events: Event[];
   agentStates: Map<string, AgentState>;
   fileEvents: FileEvent[];
   claims: Claim[];
   stats: Stats;
+  permissionRequests: PermissionRequest[];
+  selectedPermissionIndex: number;
   scrollOffset: number;
   showSystemEvents: boolean;
   focusedPanel: "agents" | "events";
@@ -60,7 +75,8 @@ export type TuiAction =
   }
   | { type: "scroll"; delta: number }
   | { type: "toggle-system-events" }
-  | { type: "toggle-focus" };
+  | { type: "toggle-focus" }
+  | { type: "permission-select"; delta: number };
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -188,6 +204,31 @@ const SYS_ERROR_RE = /^sys\.worker\..*\.error$/;
 /** Check if an event is a worker error. */
 const isErrorEvent = (event: Event): boolean => SYS_ERROR_RE.test(event.type);
 
+/** Apply a permission event to the pending requests list. */
+const applyPermissionEvent = (
+  requests: PermissionRequest[],
+  event: Event,
+): PermissionRequest[] => {
+  if (event.type === "permission.request") {
+    const parsed = PermissionRequestPayloadSchema.safeParse(event.payload);
+    if (!parsed.success) return requests;
+    return [...requests, {
+      requestId: parsed.data.request_id,
+      agentId: parsed.data.agent_id,
+      toolName: parsed.data.tool_name,
+      toolInput: parsed.data.tool_input,
+      timestamp: event.timestamp,
+      eventId: event.id,
+    }];
+  }
+  if (event.type === "permission.response") {
+    const parsed = PermissionResponsePayloadSchema.safeParse(event.payload);
+    if (!parsed.success) return requests;
+    return requests.filter((r) => r.requestId !== parsed.data.request_id);
+  }
+  return requests;
+};
+
 // ---------------------------------------------------------------------------
 // Initial state factory
 // ---------------------------------------------------------------------------
@@ -199,6 +240,8 @@ export const initialState = (): TuiState => {
     fileEvents: [],
     claims: [],
     stats: { eventCount: 0, workerCount: 0, errorCount: 0 },
+    permissionRequests: [],
+    selectedPermissionIndex: 0,
     scrollOffset: 0,
     showSystemEvents: false,
     focusedPanel: "events",
@@ -224,6 +267,14 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
       const claims = deriveClaims(agentStates);
       const errorCount = state.stats.errorCount +
         (isErrorEvent(action.event) ? 1 : 0);
+      const permissionRequests = applyPermissionEvent(
+        state.permissionRequests,
+        action.event,
+      );
+      const selectedPermissionIndex = Math.min(
+        state.selectedPermissionIndex,
+        Math.max(0, permissionRequests.length - 1),
+      );
 
       return {
         ...state,
@@ -231,6 +282,8 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
         agentStates,
         fileEvents,
         claims,
+        permissionRequests,
+        selectedPermissionIndex,
         stats: {
           eventCount: action.event.id,
           workerCount: agentStates.size,
@@ -264,5 +317,14 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
         ...state,
         focusedPanel: state.focusedPanel === "agents" ? "events" : "agents",
       };
+
+    case "permission-select": {
+      const max = Math.max(0, state.permissionRequests.length - 1);
+      const next = Math.max(
+        0,
+        Math.min(max, state.selectedPermissionIndex + action.delta),
+      );
+      return { ...state, selectedPermissionIndex: next };
+    }
   }
 };

@@ -3,17 +3,19 @@
  * @module tui/app
  */
 
-import React, { useEffect, useMemo, useReducer } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer } from "react";
 import { Box, useApp, useInput, useStdout } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { initialState, tuiReducer } from "./state.ts";
 import { createSystem, worker } from "../worker.ts";
+import { pushEvent } from "../event-queue.ts";
 import { AgentsPanel } from "./components/agents-panel.tsx";
 import { EventStreamPanel } from "./components/event-stream-panel.tsx";
 import { FilesPanel } from "./components/files-panel.tsx";
 import { ClaimsPanel } from "./components/claims-panel.tsx";
 import { StatsPanel } from "./components/stats-panel.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
+import { PermissionsPanel } from "./components/permissions-panel.tsx";
 
 export type AppProps = {
   db: DatabaseSync;
@@ -84,14 +86,43 @@ export const App = (
     return () => timers.forEach(clearTimeout);
   }, [state.agentStates]);
 
+  // Respond to a pending permission request with allow or deny.
+  const respondPermission = useCallback(
+    (behavior: "allow" | "deny") => {
+      const req = state.permissionRequests[state.selectedPermissionIndex];
+      if (!req) return;
+      // Push permission response from user.
+      // Reason: it's the user that is making this decision.
+      // Also if it came from _tui, we would miss it because we ignore self
+      // to prevent a recursive loop from our own events.
+      pushEvent(db, "user", "permission.response", {
+        request_id: req.requestId,
+        behavior,
+      });
+    },
+    [db, state.permissionRequests, state.selectedPermissionIndex],
+  );
+
   // Keyboard input handling
   useInput((input, key) => {
     if (input === "q") {
       exit();
+    } else if (input === "y" && state.permissionRequests.length > 0) {
+      respondPermission("allow");
+    } else if (input === "n" && state.permissionRequests.length > 0) {
+      respondPermission("deny");
     } else if (input === "j" || key.downArrow) {
-      dispatch({ type: "scroll", delta: 1 });
+      if (state.permissionRequests.length > 0) {
+        dispatch({ type: "permission-select", delta: 1 });
+      } else {
+        dispatch({ type: "scroll", delta: 1 });
+      }
     } else if (input === "k" || key.upArrow) {
-      dispatch({ type: "scroll", delta: -1 });
+      if (state.permissionRequests.length > 0) {
+        dispatch({ type: "permission-select", delta: -1 });
+      } else {
+        dispatch({ type: "scroll", delta: -1 });
+      }
     } else if (input === "s") {
       dispatch({ type: "toggle-system-events" });
     } else if (key.tab) {
@@ -112,8 +143,14 @@ export const App = (
   return (
     <Box flexDirection="column" width="100%" height="100%">
       <Box flexDirection="row" flexGrow={1}>
-        {/* Left column - fixed 34 chars width */}
-        <Box flexDirection="column" width={34}>
+        {/* Left column */}
+        <Box flexDirection="column" width={48}>
+          {state.permissionRequests.length > 0 && (
+            <PermissionsPanel
+              requests={state.permissionRequests}
+              selectedIndex={state.selectedPermissionIndex}
+            />
+          )}
           <AgentsPanel agents={agentsArray} />
           <FilesPanel fileEvents={state.fileEvents} />
           <ClaimsPanel claims={state.claims} />
@@ -130,7 +167,7 @@ export const App = (
           />
         </Box>
       </Box>
-      <StatusBar />
+      <StatusBar hasPermissions={state.permissionRequests.length > 0} />
     </Box>
   );
 };

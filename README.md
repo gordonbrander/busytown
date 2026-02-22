@@ -241,17 +241,18 @@ busytown includes a terminal dashboard for monitoring agent activity:
 busytown dashboard
 ```
 
-The dashboard tracks agent status, file events, active claims, queue stats, and
-events.
+The dashboard tracks agent status, file events, active claims, and events. It
+also surfaces tool permission requests from agents.
 
 **Keyboard shortcuts:**
 
-| Key     | Action                          |
-| ------- | ------------------------------- |
-| `j`/`k` | Scroll the event stream up/down |
-| `s`     | Toggle system events on/off     |
-| `Tab`   | Switch focus between panels     |
-| `q`     | Quit                            |
+| Key     | Action                            |
+| ------- | --------------------------------- |
+| `j`/`k` | Scroll the event stream up/down   |
+| `y`/`n` | Allow / deny a permission request |
+| `s`     | Toggle system events on/off       |
+| `Tab`   | Switch focus between panels       |
+| `q`     | Quit                              |
 
 **Options:**
 
