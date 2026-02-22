@@ -13,7 +13,7 @@ export interface FilesPanelProps {
   fileEvents: FileEvent[];
 }
 
-export const FilesPanel: React.FC<FilesPanelProps> = ({ fileEvents }) => {
+export const FilesPanel = ({ fileEvents }: FilesPanelProps): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>

@@ -16,13 +16,13 @@ export interface EventStreamPanelProps {
   visibleRows: number;
 }
 
-export const EventStreamPanel: React.FC<EventStreamPanelProps> = ({
+export const EventStreamPanel = ({
   events,
   scrollOffset,
   showSystemEvents,
   focused,
   visibleRows,
-}) => {
+}: EventStreamPanelProps): React.ReactElement => {
   // Filter events
   let filtered = events.filter((e) => {
     // Exclude file events (they have their own panel)

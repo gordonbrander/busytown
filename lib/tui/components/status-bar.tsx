@@ -6,7 +6,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-export const StatusBar: React.FC = () => {
+export const StatusBar = (): React.ReactElement => {
   return (
     <Box paddingX={1} paddingY={0}>
       <Box flexGrow={1}>

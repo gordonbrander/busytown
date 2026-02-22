@@ -13,7 +13,7 @@ export type AgentsPanelProps = {
   agents: AgentState[];
 };
 
-export const AgentsPanel: React.FC<AgentsPanelProps> = ({ agents }) => {
+export const AgentsPanel = ({ agents }: AgentsPanelProps): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>

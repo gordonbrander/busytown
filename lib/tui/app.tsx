@@ -22,7 +22,7 @@ export type AppProps = {
   pollIntervalMs: number;
 };
 
-export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
+export const App = ({ db, agentIds, pollIntervalMs }: AppProps): React.ReactElement => {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(tuiReducer, agentIds, initialState);
   const systemRef = useRef<WorkerSystem | undefined>(undefined);

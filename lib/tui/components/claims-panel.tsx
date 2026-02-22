@@ -11,7 +11,7 @@ export interface ClaimsPanelProps {
   claims: Claim[];
 }
 
-export const ClaimsPanel: React.FC<ClaimsPanelProps> = ({ claims }) => {
+export const ClaimsPanel = ({ claims }: ClaimsPanelProps): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>

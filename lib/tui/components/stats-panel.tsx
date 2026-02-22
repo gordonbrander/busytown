@@ -11,7 +11,7 @@ export interface StatsPanelProps {
   stats: Stats;
 }
 
-export const StatsPanel: React.FC<StatsPanelProps> = ({ stats }) => {
+export const StatsPanel = ({ stats }: StatsPanelProps): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>
