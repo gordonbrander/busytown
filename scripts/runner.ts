@@ -8,58 +8,11 @@ import { Command } from "@cliffy/command";
 import { runMain } from "../lib/runner.ts";
 import { shellEscape } from "../lib/shell.ts";
 import { create as createLogger } from "../lib/logger.ts";
+import { getRunningPid, removePid, writePid } from "../lib/pid.ts";
 
 const logger = createLogger({ source: "runner-cli" });
 
-const PID_FILE = ".runner.pid";
 const LOG_FILE = ".daemon-stderr.log";
-
-// --- Utility functions ---
-
-async function readPid(): Promise<number | undefined> {
-  try {
-    const text = await Deno.readTextFile(PID_FILE);
-    const pid = parseInt(text.trim(), 10);
-    return Number.isNaN(pid) ? undefined : pid;
-  } catch {
-    return undefined;
-  }
-}
-
-async function writePid(pid: number): Promise<void> {
-  await Deno.writeTextFile(PID_FILE, String(pid) + "\n");
-}
-
-async function removePid(): Promise<void> {
-  try {
-    await Deno.remove(PID_FILE);
-  } catch {
-    // ignore if already gone
-  }
-}
-
-async function isAlive(pid: number): Promise<boolean> {
-  try {
-    const cmd = new Deno.Command("kill", {
-      args: ["-0", String(pid)],
-      stderr: "null",
-      stdout: "null",
-    });
-    const { success } = await cmd.output();
-    return success;
-  } catch {
-    return false;
-  }
-}
-
-/** Read PID file and check if process is alive. Cleans stale PID file. */
-async function getRunningPid(): Promise<number | undefined> {
-  const pid = await readPid();
-  if (pid == undefined) return undefined;
-  if (await isAlive(pid)) return pid;
-  await removePid();
-  return undefined;
-}
 
 async function killProcessTree(pid: number): Promise<void> {
   // Kill children first (the deno runner), then the parent loop

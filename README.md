@@ -233,6 +233,35 @@ plan <prd-file>        # Push a plan.request event
 --exclude <patterns>   # Glob patterns to exclude from watching
 ```
 
+## Dashboard
+
+busytown includes a terminal dashboard for monitoring agent activity:
+
+```bash
+busytown dashboard
+```
+
+The dashboard tracks agent status, file events, active claims, queue stats, and
+events.
+
+**Keyboard shortcuts:**
+
+| Key     | Action                          |
+| ------- | ------------------------------- |
+| `j`/`k` | Scroll the event stream up/down |
+| `s`     | Toggle system events on/off     |
+| `Tab`   | Switch focus between panels     |
+| `q`     | Quit                            |
+
+**Options:**
+
+```bash
+busytown dashboard --db events.db --poll 500
+```
+
+- `--db <path>` — Database path (default: `events.db`)
+- `--poll <ms>` — Poll interval in ms (default: `500`)
+
 ## File system watcher
 
 The runner watches directories for file system changes and pushes `file.create`,

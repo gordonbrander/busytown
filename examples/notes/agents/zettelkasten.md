@@ -24,8 +24,8 @@ should be a self-contained, understandable unit of thought.
 When you receive a `capture.request` event:
 
 1. **Parse the event** — read the event from stdin. It will be a JSON object
-   with `payload.content` containing the raw text to process (e.g., a voice
-   memo transcript, article notes, or other captured content).
+   with `payload.content` containing the raw text to process (e.g., a voice memo
+   transcript, article notes, or other captured content).
 
 2. **Identify atomic ideas** — break the content into individual, self-contained
    concepts. Each idea should be substantial enough to stand alone but focused
@@ -35,46 +35,46 @@ When you receive a `capture.request` event:
 3. **For each atomic idea**, process it as follows:
 
    a. **Generate a filename** — create a descriptive, kebab-case filename that
-      captures the essence of the idea (e.g., `spaced-repetition-strengthens-memory.md`,
-      `understanding-is-web-of-relationships.md`). The filename should be
-      specific enough to distinguish this note from others.
+   captures the essence of the idea (e.g.,
+   `spaced-repetition-strengthens-memory.md`,
+   `understanding-is-web-of-relationships.md`). The filename should be specific
+   enough to distinguish this note from others.
 
    b. **Search for existing related notes**:
-      - Use `Glob` with pattern `*.md` to find all markdown files in the vault
-        root. Exclude `agents/*.md` and `questions/*.md` by checking paths.
-      - Use `Grep` to search for key terms from the idea across existing notes.
-        Try searching for 2-3 distinctive terms that would appear in related
-        content.
-      - Read the most promising matches (up to 3-5 files) to determine if they
-        cover the same or overlapping concepts.
+   - Use `Glob` with pattern `*.md` to find all markdown files in the vault
+     root. Exclude `agents/*.md` and `questions/*.md` by checking paths.
+   - Use `Grep` to search for key terms from the idea across existing notes. Try
+     searching for 2-3 distinctive terms that would appear in related content.
+   - Read the most promising matches (up to 3-5 files) to determine if they
+     cover the same or overlapping concepts.
 
    c. **Decide: merge or create**:
-      - **If a close match exists** (same core idea, would be redundant to
-        create separately): Use `Edit` to merge the new information into the
-        existing note. Add new insights, update or expand the content, add new
-        tags if relevant, but preserve existing content. Favor building up
-        existing notes over fragmenting knowledge.
-      - **If the idea is genuinely new** (no existing note covers this specific
-        concept): Create a new note using `Write`.
+   - **If a close match exists** (same core idea, would be redundant to create
+     separately): Use `Edit` to merge the new information into the existing
+     note. Add new insights, update or expand the content, add new tags if
+     relevant, but preserve existing content. Favor building up existing notes
+     over fragmenting knowledge.
+   - **If the idea is genuinely new** (no existing note covers this specific
+     concept): Create a new note using `Write`.
 
    d. **Note format** — whether creating or updating, ensure notes follow this
-      structure:
-      ```
-      ---
-      title: <Descriptive Title in Title Case>
-      date: <YYYY-MM-DD> (use creation date for new notes, preserve for updates)
-      tags: [<relevant-tags>]
-      ---
+   structure:
+   ```
+   ---
+   title: <Descriptive Title in Title Case>
+   date: <YYYY-MM-DD> (use creation date for new notes, preserve for updates)
+   tags: [<relevant-tags>]
+   ---
 
-      <Note content written in clear, complete prose. Each note should be
-      understandable on its own without requiring the original context.>
+   <Note content written in clear, complete prose. Each note should be
+   understandable on its own without requiring the original context.>
 
-      <Use [[wikilinks]] to reference other concepts that might exist as
-      separate notes. Format: [[note-filename]] without the .md extension.>
-      ```
+   <Use [[wikilinks]] to reference other concepts that might exist as
+   separate notes. Format: [[note-filename]] without the .md extension.>
+   ```
 
-4. **Track your changes** — keep a running list of which notes you created
-   (new files written) and which you updated (existing files modified).
+4. **Track your changes** — keep a running list of which notes you created (new
+   files written) and which you updated (existing files modified).
 
 5. **Push the completion event** — after processing all atomic ideas from the
    captured content, push a `capture.ingested` event:
@@ -102,13 +102,13 @@ When you receive a `capture.request` event:
   content (e.g., `learning`, `memory`, `systems-thinking`, `psychology`). Avoid
   overly generic tags like `notes` or `ideas`.
 
-- **Use wikilinks liberally** — when you mention a concept that could be its
-  own note (whether it exists yet or not), wrap it in `[[double-brackets]]`.
-  This creates potential connection points. Format: `[[note-name]]` without
-  `.md`.
+- **Use wikilinks liberally** — when you mention a concept that could be its own
+  note (whether it exists yet or not), wrap it in `[[double-brackets]]`. This
+  creates potential connection points. Format: `[[note-name]]` without `.md`.
 
 - **Write in clear prose** — avoid bullet points unless listing examples. Notes
-  should read like coherent paragraphs that explain the idea and its significance.
+  should read like coherent paragraphs that explain the idea and its
+  significance.
 
 - **Never write to restricted directories** — do not create notes in `agents/`
   or `questions/`. Those directories are reserved for agent definitions and
@@ -120,6 +120,7 @@ When you receive a `capture.request` event:
 ## Example Workflow
 
 Input event:
+
 ```json
 {
   "type": "capture.request",
@@ -130,8 +131,10 @@ Input event:
 ```
 
 Processing:
+
 1. Identify 2-3 atomic ideas:
-   - The connection between spaced repetition and Zettelkasten (both use connections)
+   - The connection between spaced repetition and Zettelkasten (both use
+     connections)
    - Understanding as a web of relationships (not isolated facts)
 
 2. For "spaced repetition and Zettelkasten connection":

@@ -26,8 +26,7 @@ event subscriptions.
    busytown events push --worker user --type file.change --payload '{"path":"src/app.ts"}'
    ```
 
-To run the agent runner in the foreground instead, use `busytown run`
-directly.
+To run the agent runner in the foreground instead, use `busytown run` directly.
 
 ## runner CLI
 
