@@ -34,7 +34,7 @@ export const FilesPanel = (
         else if (opChar === "D") opColor = "red";
         else if (opChar === "R") opColor = "blue";
 
-        const path = truncatePath(event.path, 18);
+        const path = truncatePath(event.path, 32);
         const time = formatRelativeTime(event.timestamp);
 
         return (

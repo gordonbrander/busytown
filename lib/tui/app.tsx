@@ -143,8 +143,8 @@ export const App = (
   return (
     <Box flexDirection="column" width="100%" height="100%">
       <Box flexDirection="row" flexGrow={1}>
-        {/* Left column - fixed 34 chars width */}
-        <Box flexDirection="column" width={34}>
+        {/* Left column */}
+        <Box flexDirection="column" width={48}>
           {state.permissionRequests.length > 0 && (
             <PermissionsPanel
               requests={state.permissionRequests}
