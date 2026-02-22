@@ -36,7 +36,7 @@ export const App = (
         listen: ["*"],
         hidden: true,
         run: (event) => {
-          dispatch({ type: "EVENT_RECEIVED", event });
+          dispatch({ type: "event", event });
         },
       }),
     );
@@ -56,7 +56,7 @@ export const App = (
           setTimeout(
             () =>
               dispatch({
-                type: "INDICATOR_TRANSITION",
+                type: "indicator-transition",
                 agentId,
                 from: "received",
                 to: "processing",
@@ -70,7 +70,7 @@ export const App = (
           setTimeout(
             () =>
               dispatch({
-                type: "INDICATOR_TRANSITION",
+                type: "indicator-transition",
                 agentId,
                 from: "pushed",
                 to: revertTo,
@@ -89,13 +89,13 @@ export const App = (
     if (input === "q") {
       exit();
     } else if (input === "j" || key.downArrow) {
-      dispatch({ type: "SCROLL", delta: 1 });
+      dispatch({ type: "scroll", delta: 1 });
     } else if (input === "k" || key.upArrow) {
-      dispatch({ type: "SCROLL", delta: -1 });
+      dispatch({ type: "scroll", delta: -1 });
     } else if (input === "s") {
-      dispatch({ type: "TOGGLE_SYSTEM_EVENTS" });
+      dispatch({ type: "toggle-system-events" });
     } else if (key.tab) {
-      dispatch({ type: "TOGGLE_FOCUS" });
+      dispatch({ type: "toggle-focus" });
     }
   });
 

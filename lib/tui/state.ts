@@ -51,16 +51,16 @@ export type TuiState = {
 // ---------------------------------------------------------------------------
 
 export type TuiAction =
-  | { type: "EVENT_RECEIVED"; event: Event }
+  | { type: "event"; event: Event }
   | {
-    type: "INDICATOR_TRANSITION";
+    type: "indicator-transition";
     agentId: string;
     from: IndicatorState;
     to: IndicatorState;
   }
-  | { type: "SCROLL"; delta: number }
-  | { type: "TOGGLE_SYSTEM_EVENTS" }
-  | { type: "TOGGLE_FOCUS" };
+  | { type: "scroll"; delta: number }
+  | { type: "toggle-system-events" }
+  | { type: "toggle-focus" };
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -211,7 +211,7 @@ export const initialState = (): TuiState => {
 
 export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
   switch (action.type) {
-    case "EVENT_RECEIVED": {
+    case "event": {
       const events = [...state.events, action.event].slice(-500);
       const agentStates = applyEventToAgentStates(
         state.agentStates,
@@ -239,7 +239,7 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
       };
     }
 
-    case "INDICATOR_TRANSITION": {
+    case "indicator-transition": {
       const current = state.agentStates.get(action.agentId);
       if (!current || current.indicatorState !== action.from) return state;
       const agentStates = new Map(state.agentStates);
@@ -250,16 +250,16 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
       return { ...state, agentStates };
     }
 
-    case "SCROLL":
+    case "scroll":
       return {
         ...state,
         scrollOffset: Math.max(0, state.scrollOffset + action.delta),
       };
 
-    case "TOGGLE_SYSTEM_EVENTS":
+    case "toggle-system-events":
       return { ...state, showSystemEvents: !state.showSystemEvents };
 
-    case "TOGGLE_FOCUS":
+    case "toggle-focus":
       return {
         ...state,
         focusedPanel: state.focusedPanel === "agents" ? "events" : "agents",
