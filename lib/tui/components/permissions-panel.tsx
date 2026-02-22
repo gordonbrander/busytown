@@ -46,10 +46,10 @@ export const PermissionsPanel = (
         return (
           <Box key={req.requestId} paddingX={1}>
             <Text>
-              {selected ? <Text color="yellow">&gt; </Text> : "  "}
+              {selected ? <Text color="yellow">&gt;</Text> : "  "}
               <Text color="cyan">[{truncate(req.agentId, 12)}]</Text>{" "}
               <Text bold>{req.toolName}</Text>
-              {inputStr ? <Text color="gray"> {inputStr}</Text> : ""}
+              {inputStr ? <Text color="gray">{inputStr}</Text> : ""}
             </Text>
           </Box>
         );

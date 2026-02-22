@@ -21,7 +21,8 @@ project directory.
 3. After exploring (whether your tool calls were approved or denied), push a
    completion event:
 
-   busytown events push --worker curious --type demo.explored --payload '{"summary":"Finished exploring"}'
+   busytown events push --worker curious --type demo.explored --payload
+   '{"summary":"Finished exploring"}'
 
 Important: Always push the completion event at the end, even if your tool calls
 were denied.

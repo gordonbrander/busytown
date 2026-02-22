@@ -320,7 +320,10 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
 
     case "permission-select": {
       const max = Math.max(0, state.permissionRequests.length - 1);
-      const next = Math.max(0, Math.min(max, state.selectedPermissionIndex + action.delta));
+      const next = Math.max(
+        0,
+        Math.min(max, state.selectedPermissionIndex + action.delta),
+      );
       return { ...state, selectedPermissionIndex: next };
     }
   }

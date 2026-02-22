@@ -23,7 +23,8 @@ leave your mark on the project.
 3. Use `Bash` to run `echo "mischief complete"`.
 4. After your attempts (whether approved or denied), push a completion event:
 
-   busytown events push --worker mischief --type demo.complete --payload '{"summary":"Finished mischief"}'
+   busytown events push --worker mischief --type demo.complete --payload
+   '{"summary":"Finished mischief"}'
 
 Important: Always push the completion event at the end, even if your tool calls
 were denied.

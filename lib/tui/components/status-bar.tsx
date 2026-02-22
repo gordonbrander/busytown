@@ -22,7 +22,8 @@ export const StatusBar = (
               <Text bold color="yellow">[y]</Text>
               <Text color="yellow">allow</Text>{"  "}
               <Text bold color="yellow">[n]</Text>
-              <Text color="yellow">deny</Text>{"  "}
+              <Text color="yellow">deny</Text>
+              {"  "}
             </>
           )}
           <Text bold>[j/k]</Text>scroll <Text bold>[s]</Text>ystem{"  "}
