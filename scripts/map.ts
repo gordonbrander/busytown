@@ -4,7 +4,7 @@
  */
 
 import { Command } from "@cliffy/command";
-import { type AgentDef, loadAllAgents } from "../lib/runner.ts";
+import { type AgentDef, loadAllAgents } from "../lib/agent.ts";
 import { renderMermaidAscii } from "beautiful-mermaid";
 
 /** Sanitise a string so it can be used as a Mermaid node ID. */

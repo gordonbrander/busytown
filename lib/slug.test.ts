@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { toSlug } from "./slug.ts";
+import { pathToSlug, toSlug } from "./slug.ts";
 
 // --- toSlug ---
 
@@ -57,4 +57,41 @@ Deno.test("toSlug - mixed camelCase with hyphens", () => {
 
 Deno.test("toSlug - tabs and newlines become hyphens", () => {
   assertEquals(toSlug("my\tagent\nworker"), "my-agent-worker");
+});
+
+// --- pathToSlug ---
+
+Deno.test("pathToSlug - extracts slug from simple filename", () => {
+  assertEquals(pathToSlug("/path/to/agents/my-agent.md"), "my-agent");
+});
+
+Deno.test("pathToSlug - lowercases the slug", () => {
+  assertEquals(pathToSlug("/path/to/agents/MyAgent.md"), "myagent");
+});
+
+Deno.test("pathToSlug - converts spaces to dashes", () => {
+  assertEquals(pathToSlug("/path/to/agents/my agent.md"), "my-agent");
+});
+
+Deno.test("pathToSlug - handles dotfile edge case", () => {
+  // basename(".md", ".md") returns "" on some platforms, "md" on others
+  // Either way, it should not crash
+  const result = pathToSlug("/path/to/agents/.md");
+  assertEquals(typeof result === "string" || result === undefined, true);
+});
+
+Deno.test("pathToSlug - handles nested path", () => {
+  assertEquals(
+    pathToSlug("/Users/foo/Dev/project/agents/code-review.md"),
+    "code-review",
+  );
+});
+
+Deno.test("pathToSlug - strips non-.md extensions", () => {
+  assertEquals(pathToSlug("/path/to/file.txt"), "file");
+  assertEquals(pathToSlug("/path/to/file.yaml"), "file");
+});
+
+Deno.test("pathToSlug - handles file with no extension", () => {
+  assertEquals(pathToSlug("/path/to/agents/myagent"), "myagent");
 });

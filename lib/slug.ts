@@ -1,3 +1,5 @@
+import { basename, extname } from "node:path";
+
 /**
  * Normalize string to a slug.
  * Slugs allow word characters and dashes.
@@ -14,3 +16,9 @@ export const toSlug = (s: string): string | undefined => {
 
   return slug;
 };
+
+const stem = (filePath: string) => basename(filePath, extname(filePath));
+
+/** Derive a slug from a file path by stripping the extension and slugifying the stem. */
+export const pathToSlug = (filePath: string): string | undefined =>
+  toSlug(stem(filePath));
