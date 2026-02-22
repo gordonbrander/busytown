@@ -3,12 +3,11 @@
  * @module tui/app
  */
 
-import React, { useEffect, useMemo, useReducer, useRef } from "react";
+import React, { useEffect, useMemo, useReducer } from "react";
 import { Box, useApp, useInput, useStdout } from "ink";
 import type { DatabaseSync } from "node:sqlite";
 import { initialState, tuiReducer } from "./state.ts";
-import { updateCursor } from "../event-queue.ts";
-import { createSystem, worker, type WorkerSystem } from "../worker.ts";
+import { createSystem, worker } from "../worker.ts";
 import { AgentsPanel } from "./components/agents-panel.tsx";
 import { EventStreamPanel } from "./components/event-stream-panel.tsx";
 import { FilesPanel } from "./components/files-panel.tsx";
@@ -22,25 +21,19 @@ export type AppProps = {
   pollIntervalMs: number;
 };
 
-export const App = ({ db, agentIds, pollIntervalMs }: AppProps): React.ReactElement => {
+export const App = (
+  { db, agentIds, pollIntervalMs }: AppProps,
+): React.ReactElement => {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(tuiReducer, agentIds, initialState);
-  const systemRef = useRef<WorkerSystem | undefined>(undefined);
 
   // Create worker system once, clean up on unmount
   useEffect(() => {
-    // Reset TUI cursor to tail (start fresh, don't replay history)
-    const maxRow = db.prepare("SELECT MAX(id) as maxId FROM events").get() as
-      | { maxId: number | null }
-      | undefined;
-    if (maxRow?.maxId) updateCursor(db, "__tui__", maxRow.maxId);
-
     const system = createSystem(db, pollIntervalMs);
-    systemRef.current = system;
 
     system.spawn(
       worker({
-        id: "__tui__",
+        id: "_tui",
         listen: ["*"],
         hidden: true,
         run: (event) => {
