@@ -126,7 +126,12 @@ const applyEventToAgentStates = (
     const current = states.get(event.worker_id);
     const next = new Map(states);
     next.set(event.worker_id, {
-      ...(current ?? { id: event.worker_id, state: "idle" as const, indicatorState: "idle" as const }),
+      ...(current ??
+        {
+          id: event.worker_id,
+          state: "idle" as const,
+          indicatorState: "idle" as const,
+        }),
       indicatorState: "pushed",
     });
     return next;
