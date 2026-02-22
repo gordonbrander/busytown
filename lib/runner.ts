@@ -378,12 +378,17 @@ export const runMain = async (
     },
   });
 
-  Deno.addSignalListener("SIGTERM", async () => {
+  const shutdown = async () => {
+    pushEvent(db, "sys", "sys.lifecycle.finish");
     await system.stop();
     await stopWatchFs();
     db.close();
     Deno.exit(0);
-  });
+  };
 
+  Deno.addSignalListener("SIGTERM", shutdown);
+  Deno.addSignalListener("SIGINT", shutdown);
+
+  pushEvent(db, "sys", "sys.lifecycle.start");
   await forever();
 };
