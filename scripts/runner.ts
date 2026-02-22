@@ -8,11 +8,7 @@ import { Command } from "@cliffy/command";
 import { runMain } from "../lib/runner.ts";
 import { shellEscape } from "../lib/shell.ts";
 import { create as createLogger } from "../lib/logger.ts";
-import {
-  getRunningPid,
-  removePid,
-  writePid,
-} from "../lib/pid.ts";
+import { getRunningPid, removePid, writePid } from "../lib/pid.ts";
 
 const logger = createLogger({ source: "runner-cli" });
 
