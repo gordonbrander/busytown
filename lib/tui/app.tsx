@@ -17,15 +17,14 @@ import { StatusBar } from "./components/status-bar.tsx";
 
 export type AppProps = {
   db: DatabaseSync;
-  agentIds: string[];
   pollIntervalMs: number;
 };
 
 export const App = (
-  { db, agentIds, pollIntervalMs }: AppProps,
+  { db, pollIntervalMs }: AppProps,
 ): React.ReactElement => {
   const { exit } = useApp();
-  const [state, dispatch] = useReducer(tuiReducer, agentIds, initialState);
+  const [state, dispatch] = useReducer(tuiReducer, undefined, initialState);
 
   // Create worker system once, clean up on unmount
   useEffect(() => {

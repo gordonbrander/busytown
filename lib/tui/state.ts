@@ -84,7 +84,7 @@ const applyEventToAgentStates = (
 ): Map<string, AgentState> => {
   const parsed = parseSysWorkerEvent(event.type);
 
-  if (parsed && states.has(parsed.agentId)) {
+  if (parsed) {
     const next = new Map(states);
     const { agentId, kind } = parsed;
 
@@ -121,12 +121,12 @@ const applyEventToAgentStates = (
   // Non-sys events emitted by an agent → flash "pushed"
   if (
     !event.type.startsWith("sys.") &&
-    states.has(event.worker_id)
+    event.worker_id
   ) {
-    const current = states.get(event.worker_id)!;
+    const current = states.get(event.worker_id);
     const next = new Map(states);
     next.set(event.worker_id, {
-      ...current,
+      ...(current ?? { id: event.worker_id, state: "idle" as const, indicatorState: "idle" as const }),
       indicatorState: "pushed",
     });
     return next;
@@ -187,15 +187,10 @@ const isErrorEvent = (event: Event): boolean => SYS_ERROR_RE.test(event.type);
 // Initial state factory
 // ---------------------------------------------------------------------------
 
-export const initialState = (agentIds: string[]): TuiState => {
-  const agentStates = new Map<string, AgentState>();
-  for (const id of agentIds) {
-    agentStates.set(id, { id, state: "idle", indicatorState: "idle" });
-  }
-
+export const initialState = (): TuiState => {
   return {
     events: [],
-    agentStates,
+    agentStates: new Map<string, AgentState>(),
     fileEvents: [],
     claims: [],
     stats: { eventCount: 0, workerCount: 0, errorCount: 0 },
