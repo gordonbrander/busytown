@@ -11,7 +11,7 @@
 import { debounce } from "@std/async/debounce";
 import type { DatabaseSync } from "node:sqlite";
 import { pushEvent } from "./event-queue.ts";
-import { type AgentDef, loadAgentDef } from "./runner.ts";
+import { type AgentDef, loadAgentDef } from "./agent.ts";
 import { pathToSlug } from "./slug.ts";
 import type { Worker, WorkerSystem } from "./worker.ts";
 import type { Cleanup } from "./fs-watcher.ts";
