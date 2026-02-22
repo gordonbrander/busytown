@@ -91,7 +91,11 @@ export const App = (
     (behavior: "allow" | "deny") => {
       const req = state.permissionRequests[state.selectedPermissionIndex];
       if (!req) return;
-      pushEvent(db, "_tui", "permission.response", {
+      // Push permission response from user.
+      // Reason: it's the user that is making this decision.
+      // Also if it came from _tui, we would miss it because we ignore self
+      // to prevent a recursive loop from our own events.
+      pushEvent(db, "user", "permission.response", {
         request_id: req.requestId,
         behavior,
       });
