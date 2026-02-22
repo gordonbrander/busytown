@@ -35,23 +35,15 @@ export type Stats = {
   errorCount: number;
 };
 
-export type DaemonStatus = {
-  running: boolean;
-  pid?: number;
-  uptime?: number;
-};
-
 export type TuiState = {
   events: Event[];
   agentStates: Map<string, AgentState>;
   fileEvents: FileEvent[];
   claims: Claim[];
   stats: Stats;
-  daemon: DaemonStatus;
   scrollOffset: number;
   showSystemEvents: boolean;
   focusedPanel: "agents" | "events";
-  tick: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -60,8 +52,6 @@ export type TuiState = {
 
 export type TuiAction =
   | { type: "EVENT_RECEIVED"; event: Event }
-  | { type: "STATS_RECEIVED"; eventCount: number; workerCount: number }
-  | { type: "DAEMON_STATUS"; status: DaemonStatus }
   | {
     type: "INDICATOR_TRANSITION";
     agentId: string;
@@ -70,8 +60,7 @@ export type TuiAction =
   }
   | { type: "SCROLL"; delta: number }
   | { type: "TOGGLE_SYSTEM_EVENTS" }
-  | { type: "TOGGLE_FOCUS" }
-  | { type: "TICK" };
+  | { type: "TOGGLE_FOCUS" };
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -211,11 +200,9 @@ export const initialState = (agentIds: string[]): TuiState => {
     fileEvents: [],
     claims: [],
     stats: { eventCount: 0, workerCount: 0, errorCount: 0 },
-    daemon: { running: false },
     scrollOffset: 0,
     showSystemEvents: false,
     focusedPanel: "events",
-    tick: 0,
   };
 };
 
@@ -245,22 +232,13 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
         agentStates,
         fileEvents,
         claims,
-        stats: { ...state.stats, errorCount },
-      };
-    }
-
-    case "STATS_RECEIVED":
-      return {
-        ...state,
         stats: {
-          ...state.stats,
-          eventCount: action.eventCount,
-          workerCount: action.workerCount,
+          eventCount: action.event.id,
+          workerCount: agentStates.size,
+          errorCount,
         },
       };
-
-    case "DAEMON_STATUS":
-      return { ...state, daemon: action.status };
+    }
 
     case "INDICATOR_TRANSITION": {
       const current = state.agentStates.get(action.agentId);
@@ -287,8 +265,5 @@ export const tuiReducer = (state: TuiState, action: TuiAction): TuiState => {
         ...state,
         focusedPanel: state.focusedPanel === "agents" ? "events" : "agents",
       };
-
-    case "TICK":
-      return { ...state, tick: state.tick + 1 };
   }
 };

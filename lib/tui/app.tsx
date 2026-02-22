@@ -9,7 +9,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { initialState, tuiReducer } from "./state.ts";
 import { updateCursor } from "../event-queue.ts";
 import { createSystem, worker, type WorkerSystem } from "../worker.ts";
-import { getRunningPid } from "../pid.ts";
 import { AgentsPanel } from "./components/agents-panel.tsx";
 import { EventStreamPanel } from "./components/event-stream-panel.tsx";
 import { FilesPanel } from "./components/files-panel.tsx";
@@ -26,9 +25,9 @@ export type AppProps = {
 export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
   const { exit } = useApp();
   const [state, dispatch] = useReducer(tuiReducer, agentIds, initialState);
-  const systemRef = useRef<WorkerSystem | null>(null);
+  const systemRef = useRef<WorkerSystem | undefined>(undefined);
 
-  // Spawn hidden worker once — dispatch is stable across renders
+  // Create worker system once, clean up on unmount
   useEffect(() => {
     // Reset TUI cursor to tail (start fresh, don't replay history)
     const maxRow = db.prepare("SELECT MAX(id) as maxId FROM events").get() as
@@ -53,51 +52,7 @@ export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
     return () => {
       system.stop();
     };
-  }, [db, pollIntervalMs, dispatch]);
-
-  // Clock poll (1s) — timer-based concerns only
-  useEffect(() => {
-    let daemonStartTime: number | undefined;
-    let wasRunning = false;
-
-    const clock = setInterval(async () => {
-      dispatch({ type: "TICK" });
-
-      try {
-        // Daemon status
-        const pid = await getRunningPid();
-        if (pid) {
-          if (!wasRunning) daemonStartTime = Date.now();
-          wasRunning = true;
-          const uptime = daemonStartTime
-            ? Math.floor((Date.now() - daemonStartTime) / 1000)
-            : 0;
-          dispatch({ type: "DAEMON_STATUS", status: { running: true, pid, uptime } });
-        } else {
-          if (wasRunning) daemonStartTime = undefined;
-          wasRunning = false;
-          dispatch({ type: "DAEMON_STATUS", status: { running: false } });
-        }
-
-        // Stats (cheap DB counts)
-        const eventRow = db
-          .prepare("SELECT COUNT(*) as count FROM events")
-          .get() as { count: number } | undefined;
-        const workerRow = db
-          .prepare("SELECT COUNT(*) as count FROM worker_cursors")
-          .get() as { count: number } | undefined;
-        dispatch({
-          type: "STATS_RECEIVED",
-          eventCount: eventRow?.count ?? 0,
-          workerCount: workerRow?.count ?? 0,
-        });
-      } catch {
-        // PID check or DB query failed — leave state unchanged
-      }
-    }, 1000);
-
-    return () => clearInterval(clock);
-  }, [db, dispatch]);
+  }, []);
 
   // Indicator animation effects — watch for transient states, dispatch transitions
   useEffect(() => {
@@ -183,11 +138,7 @@ export const App: React.FC<AppProps> = ({ db, agentIds, pollIntervalMs }) => {
           />
         </Box>
       </Box>
-      <StatusBar
-        daemonRunning={state.daemon.running}
-        uptime={state.daemon.uptime}
-        showSystemEvents={state.showSystemEvents}
-      />
+      <StatusBar />
     </Box>
   );
 };

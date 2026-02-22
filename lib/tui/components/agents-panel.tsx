@@ -21,9 +21,6 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({ agents }) => {
       </Box>
       {agents.map((agent) => {
         const indicator = activityChar(agent.indicatorState);
-        const duration = agent.startedAt
-          ? Math.floor(Date.now() / 1000 - agent.startedAt)
-          : 0;
 
         let stateLabel = "";
         let stateColor: ForegroundColorName = "white";
@@ -35,9 +32,6 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({ agents }) => {
           stateLabel = agent.eventId
             ? `processing #${agent.eventId}`
             : "processing";
-          if (duration > 0) {
-            stateLabel += ` (${duration}s)`;
-          }
         } else if (agent.state === "error") {
           stateLabel = "error";
           stateColor = "red";

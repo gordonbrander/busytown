@@ -55,13 +55,3 @@ export const activityChar = (state: IndicatorState): string => {
       return "!";
   }
 };
-
-/** Format uptime in seconds to human-readable string */
-export const formatUptime = (seconds: number): string => {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}m`;
-};
