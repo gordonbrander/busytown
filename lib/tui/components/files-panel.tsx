@@ -13,7 +13,9 @@ export interface FilesPanelProps {
   fileEvents: FileEvent[];
 }
 
-export const FilesPanel = ({ fileEvents }: FilesPanelProps): React.ReactElement => {
+export const FilesPanel = (
+  { fileEvents }: FilesPanelProps,
+): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>
@@ -38,11 +40,8 @@ export const FilesPanel = ({ fileEvents }: FilesPanelProps): React.ReactElement 
         return (
           <Box key={`${event.path}-${idx}`} paddingX={1}>
             <Text>
-              <Text color={opColor}>{opChar}</Text>
-              {" "}
-              <Text>{path.padEnd(18)}</Text>
-              {" "}
-              <Text color="gray">{time}</Text>
+              <Text color={opColor}>{opChar}</Text>{" "}
+              <Text>{path.padEnd(18)}</Text> <Text color="gray">{time}</Text>
             </Text>
           </Box>
         );

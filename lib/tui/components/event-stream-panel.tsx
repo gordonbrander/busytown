@@ -49,9 +49,7 @@ export const EventStreamPanel = ({
     >
       <Box paddingX={1}>
         <Text bold>Event Stream</Text>
-        {showSystemEvents && (
-          <Text color="gray"> (showing system events)</Text>
-        )}
+        {showSystemEvents && <Text color="gray">(showing system events)</Text>}
       </Box>
       {visible.length === 0 && (
         <Box paddingX={1}>

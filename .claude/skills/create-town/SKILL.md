@@ -13,7 +13,8 @@ phases.
 
 ## Phase 1: Decompose into Agent Roles
 
-Parse the user's goal (and any roles they suggested) and propose a set of agents.
+Parse the user's goal (and any roles they suggested) and propose a set of
+agents.
 
 1. If the user suggested roles, use those as the starting point. Only suggest
    additional roles if clearly needed, and explain why.
@@ -24,10 +25,10 @@ Parse the user's goal (and any roles they suggested) and propose a set of agents
      `create-agent` skill)
 3. Present the roles in a table:
 
-   | Agent | Description | Access |
-   |-------|-------------|--------|
-   | `drafter` | Drafts initial content from a brief | read-write |
-   | `reviewer` | Reviews drafts for quality and correctness | read-only |
+   | Agent      | Description                                | Access     |
+   | ---------- | ------------------------------------------ | ---------- |
+   | `drafter`  | Drafts initial content from a brief        | read-write |
+   | `reviewer` | Reviews drafts for quality and correctness | read-only  |
 
 4. Guidelines for decomposition:
    - **Single responsibility** — each agent does one thing well.
@@ -55,11 +56,11 @@ For each agent, define the events it listens for and the events it emits.
      agent (e.g., review → revise → re-review).
 3. Present as a table:
 
-   | Agent | Listens | Emits |
-   |-------|---------|-------|
-   | `drafter` | `draft.request` | `draft.created` |
-   | `reviewer` | `draft.created` | `review.created` |
-   | `drafter` | `review.created` (revise verdict) | `draft.created` |
+   | Agent      | Listens                           | Emits            |
+   | ---------- | --------------------------------- | ---------------- |
+   | `drafter`  | `draft.request`                   | `draft.created`  |
+   | `reviewer` | `draft.created`                   | `review.created` |
+   | `drafter`  | `review.created` (revise verdict) | `draft.created`  |
 
 4. Follow the table with a plain-English flow description, e.g.:
 
@@ -98,16 +99,16 @@ For each agent file:
    - A heading with the agent's name
    - A section for each event type the agent handles, with:
      - What to do when that event arrives
-     - Concrete `busytown events push` examples showing the exact event type
-       and payload shape
+     - Concrete `busytown events push` examples showing the exact event type and
+       payload shape
      - Claim logic if this agent may run as multiple instances
    - A guidelines section with agent-specific instructions
 
 3. After creating all files, summarize what was created:
 
-   | File | Description |
-   |------|-------------|
-   | `agents/drafter.md` | Drafts content from briefs |
+   | File                 | Description                |
+   | -------------------- | -------------------------- |
+   | `agents/drafter.md`  | Drafts content from briefs |
    | `agents/reviewer.md` | Reviews drafts for quality |
 
 ---
@@ -149,16 +150,16 @@ The feedback loop: `review.created` with a "revise" verdict routes back to
 `plan`, which revises and re-emits `plan.created`, cycling through `code` and
 `review` again. `plan.complete` is the terminal event.
 
-Entry event: `plan.request` (pushed by the user).
-Terminal event: `plan.complete` (nothing listens for it).
+Entry event: `plan.request` (pushed by the user). Terminal event:
+`plan.complete` (nothing listens for it).
 
 ---
 
 ## Guidelines
 
 - **Always include `emits` in frontmatter.** This is the most common mistake.
-  Without `emits`, `busytown map` cannot draw edges from the agent to
-  downstream consumers.
+  Without `emits`, `busytown map` cannot draw edges from the agent to downstream
+  consumers.
 - **Emit events for every significant action.** Starting work, completing work,
   finding issues, modifying files, encountering errors — all worth emitting.
   Even "no issues found" is a useful signal.
@@ -168,10 +169,10 @@ Terminal event: `plan.complete` (nothing listens for it).
 - **Use claims for deduplication.** If multiple events could trigger the same
   agent concurrently, have the agent claim before doing work. If the claim
   fails, stop.
-- **Be conversational.** Never skip phases or combine them. Each phase ends
-  with user confirmation. The user may want to adjust roles, rename events, or
+- **Be conversational.** Never skip phases or combine them. Each phase ends with
+  user confirmation. The user may want to adjust roles, rename events, or
   add/remove agents between phases.
 - **Kebab-case filenames.** `content-drafter.md`, not `contentDrafter.md`.
 - **Design payloads thoughtfully.** Include enough context for downstream agents
-  to do their work without re-reading event history. Paths to artifacts
-  (plans, reviews, drafts) are better than inline content.
+  to do their work without re-reading event history. Paths to artifacts (plans,
+  reviews, drafts) are better than inline content.

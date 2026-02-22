@@ -89,12 +89,11 @@ const applyEventToAgentStates = (
     const { agentId, kind } = parsed;
 
     if (kind === "start") {
-      const eventId =
-        typeof event.payload === "object" &&
+      const eventId = typeof event.payload === "object" &&
           event.payload !== null &&
           "event_id" in event.payload
-          ? (event.payload as { event_id: number }).event_id
-          : undefined;
+        ? (event.payload as { event_id: number }).event_id
+        : undefined;
       next.set(agentId, {
         id: agentId,
         state: "processing",

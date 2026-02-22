@@ -13,7 +13,9 @@ export type AgentsPanelProps = {
   agents: AgentState[];
 };
 
-export const AgentsPanel = ({ agents }: AgentsPanelProps): React.ReactElement => {
+export const AgentsPanel = (
+  { agents }: AgentsPanelProps,
+): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="gray">
       <Box paddingX={1}>
@@ -50,10 +52,8 @@ export const AgentsPanel = ({ agents }: AgentsPanelProps): React.ReactElement =>
                   : "gray"}
               >
                 {indicator}
-              </Text>
-              {" "}
-              <Text>{agent.id.padEnd(12)}</Text>
-              {" "}
+              </Text>{" "}
+              <Text>{agent.id.padEnd(12)}</Text>{" "}
               <Text color={stateColor}>{stateLabel}</Text>
             </Text>
           </Box>
