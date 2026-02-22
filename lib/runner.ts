@@ -10,16 +10,17 @@
  */
 import { z } from "zod/v4";
 import { extractYaml } from "@std/front-matter";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { Event } from "./event.ts";
 import { openDb, pipeStreamToEvents, pushEvent } from "./event-queue.ts";
 import { type FsEvent, type FsEventType, watchFs } from "./fs-watcher.ts";
 import { create as createLogger } from "./logger.ts";
 import { DatabaseSync } from "node:sqlite";
 import { renderTemplate } from "./template.ts";
-import { createSystem, worker } from "./worker.ts";
+import { createSystem, type Worker, worker } from "./worker.ts";
 import { forever } from "./utils.ts";
-import { toSlug } from "./slug.ts";
+import { pathToSlug } from "./slug.ts";
+import { watchAgents } from "./agent-watcher.ts";
 
 const logger = createLogger({ source: "runner" });
 
@@ -90,7 +91,7 @@ export const loadAgentDef = async (filePath: string): Promise<AgentDef> => {
   const raw = await Deno.readTextFile(filePath);
   const { attrs, body } = extractYaml(raw);
   const frontmatter = AgentFrontmatterSchema.parse(attrs);
-  const id = toSlug(basename(filePath, ".md"));
+  const id = pathToSlug(filePath);
 
   if (id == undefined) {
     throw new Error(`Could not transform filename to id: ${filePath}`);
@@ -291,6 +292,36 @@ export const runShellAgent = async (
   return code;
 };
 
+/** Create a factory that turns an AgentDef into a Worker. */
+export const makeAgentWorker = (
+  db: DatabaseSync,
+  dbPath: string,
+  projectRoot: string,
+): ((agent: AgentDef) => Worker) => {
+  return (agent) =>
+    worker({
+      id: agent.id,
+      listen: agent.listen,
+      ignoreSelf: agent.ignoreSelf,
+      run: async (event) => {
+        switch (agent.type) {
+          case "shell":
+            await runShellAgent(agent, event, projectRoot, db);
+            return;
+          case "claude":
+            await runClaudeAgent(agent, event, dbPath, projectRoot, db);
+            return;
+          default: {
+            const _exhaustive: never = agent;
+            throw new Error(
+              `Unknown agent type: ${(_exhaustive as AgentDef).type}`,
+            );
+          }
+        }
+      },
+    });
+};
+
 export type FsWorkerEventType =
   | "file.create"
   | "file.modify"
@@ -344,27 +375,18 @@ export const runMain = async (
   );
 
   // Agent workers
+  const toWorker = makeAgentWorker(db, dbPath, projectRoot);
   for (const agent of agents) {
-    system.spawn(
-      worker({
-        id: agent.id,
-        listen: agent.listen,
-        ignoreSelf: agent.ignoreSelf,
-        run: async (event) => {
-          switch (agent.type) {
-            case "shell":
-              await runShellAgent(agent, event, projectRoot, db);
-              return;
-            case "claude":
-              await runClaudeAgent(agent, event, dbPath, projectRoot, db);
-              return;
-            default:
-              throw new Error(`Unknown agent type`);
-          }
-        },
-      }),
-    );
+    system.spawn(toWorker(agent));
   }
+
+  const stopWatchAgents = watchAgents({
+    agentsDir,
+    system,
+    db,
+    toWorker,
+    knownAgentIds: new Set(agents.map((a) => a.id)),
+  });
 
   const stopWatchFs = watchFs({
     cwd: projectRoot,
@@ -380,6 +402,7 @@ export const runMain = async (
 
   const shutdown = async () => {
     pushEvent(db, "sys", "sys.lifecycle.finish");
+    await stopWatchAgents();
     await system.stop();
     await stopWatchFs();
     db.close();
