@@ -10,8 +10,6 @@ import { shellEscape } from "../lib/shell.ts";
 import { create as createLogger } from "../lib/logger.ts";
 import {
   getRunningPid,
-  isAlive,
-  readPid,
   removePid,
   writePid,
 } from "../lib/pid.ts";
