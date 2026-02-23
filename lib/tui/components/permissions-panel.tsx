@@ -6,15 +6,12 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { PermissionRequest } from "../state.ts";
+import { truncate } from "../../truncate.ts";
 
 export type PermissionsPanelProps = {
   requests: PermissionRequest[];
   selectedIndex: number;
 };
-
-/** Truncate a string to maxLen, adding ellipsis if needed. */
-const truncate = (s: string, maxLen: number): string =>
-  s.length > maxLen ? s.slice(0, maxLen - 1) + "\u2026" : s;
 
 /** Format tool input as a short summary string. */
 const formatInput = (input: unknown): string => {

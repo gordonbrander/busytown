@@ -7,6 +7,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { Event } from "../../event.ts";
 import { formatRelativeTime } from "../format.ts";
+import { truncate } from "../../truncate.ts";
 
 export interface EventStreamPanelProps {
   events: Event[];
@@ -15,6 +16,14 @@ export interface EventStreamPanelProps {
   focused: boolean;
   visibleRows: number;
 }
+
+const serializePayload = (payload: unknown): string => {
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+};
 
 export const EventStreamPanel = ({
   events,
@@ -38,7 +47,10 @@ export const EventStreamPanel = ({
   filtered = filtered.reverse();
 
   // Apply scroll offset
-  const visible = filtered.slice(scrollOffset, scrollOffset + visibleRows);
+  const visible = filtered.slice(
+    scrollOffset,
+    scrollOffset + visibleRows,
+  );
 
   return (
     <Box
@@ -58,15 +70,17 @@ export const EventStreamPanel = ({
       )}
       {visible.map((event) => {
         const isSys = event.type.startsWith("sys.");
-        const idStr = `#${event.id}`.padEnd(6);
+        const idStr = `#${event.id}`.padEnd(8);
         const typeStr = event.type.slice(0, 20).padEnd(20);
         const workerStr = event.worker_id.slice(0, 10).padEnd(10);
-        const timeStr = formatRelativeTime(event.timestamp);
+        const timeStr = formatRelativeTime(event.timestamp).padEnd(6);
+        const payloadStr = serializePayload(event.payload);
 
         return (
           <Box key={event.id} paddingX={1}>
             <Text color={isSys ? "gray" : undefined}>
               {idStr} {typeStr} {workerStr} {timeStr}
+              <Text color="gray">{truncate(payloadStr, 44)}</Text>
             </Text>
           </Box>
         );
