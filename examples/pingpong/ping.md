@@ -1,6 +1,7 @@
 ---
 description: Serves a pong
 listen:
+  - "sys.lifecycle.start"
   - "ping"
 emits:
   - "pong"

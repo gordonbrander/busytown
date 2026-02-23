@@ -9,10 +9,10 @@ export const formatRelativeTime = (unixEpoch: number): string => {
   const delta = now - unixEpoch;
 
   if (delta < 1) return "now";
-  if (delta < 60) return `${delta}s ago`;
-  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`;
-  return `${Math.floor(delta / 86400)}d ago`;
+  if (delta < 60) return `${delta}s`;
+  if (delta < 3600) return `${Math.floor(delta / 60)}m`;
+  if (delta < 86400) return `${Math.floor(delta / 3600)}h`;
+  return `${Math.floor(delta / 86400)}d`;
 };
 
 /** Map file event type to single-char prefix: A, M, D, R */
@@ -22,15 +22,6 @@ export const fileOpChar = (eventType: string): string => {
   if (eventType.includes("delete") || eventType.includes("remove")) return "D";
   if (eventType.includes("rename") || eventType.includes("move")) return "R";
   return "?";
-};
-
-/** Truncate a file path to fit a max width, using …/ prefix */
-export const truncatePath = (path: string, maxLen: number): string => {
-  if (path.length <= maxLen) return path;
-  const ellipsis = "…/";
-  const remaining = maxLen - ellipsis.length;
-  if (remaining <= 0) return ellipsis;
-  return ellipsis + path.slice(-remaining);
 };
 
 /** Agent activity indicator character and style */

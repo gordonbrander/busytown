@@ -7,7 +7,8 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { ForegroundColorName } from "chalk";
 import type { FileEvent } from "../state.ts";
-import { fileOpChar, formatRelativeTime, truncatePath } from "../format.ts";
+import { fileOpChar, formatRelativeTime } from "../format.ts";
+import { truncatePath } from "../../truncate.ts";
 
 export interface FilesPanelProps {
   fileEvents: FileEvent[];
