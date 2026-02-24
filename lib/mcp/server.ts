@@ -93,7 +93,7 @@ export const startMcpServer = async (
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ updatedInput: input }),
+          text: JSON.stringify({ behavior: "allow", updatedInput: input }),
         }],
       };
     }
