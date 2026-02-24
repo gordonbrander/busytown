@@ -98,6 +98,7 @@ export const App = (
       pushEvent(db, "user", "permission.response", {
         request_id: req.requestId,
         behavior,
+        ...(behavior === "deny" ? { message: "Denied by user" } : {}),
       });
     },
     [db, state.permissionRequests, state.selectedPermissionIndex],
