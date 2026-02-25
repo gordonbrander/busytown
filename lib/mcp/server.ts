@@ -89,12 +89,21 @@ export const startMcpServer = async (
 
     const response = await waitForResponse(db, requestId, requestEvent.id);
 
+    if (response.behavior === "allow") {
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ behavior: "allow", updatedInput: input }),
+        }],
+      };
+    }
+
     return {
       content: [{
         type: "text" as const,
         text: JSON.stringify({
-          behavior: response.behavior,
-          ...(response.message ? { message: response.message } : {}),
+          behavior: "deny",
+          message: response.message ?? "Permission denied by user",
         }),
       }],
     };
