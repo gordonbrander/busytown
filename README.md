@@ -1,3 +1,11 @@
+# >>> REPOSITORY HAS MOVED <<<
+
+Busytown has become a Pi agent extension:
+
+**[github.com/gordonbrander/busytown-pi](https://github.com/gordonbrander/busytown-pi)**
+
+---
+
 # busytown
 
 _A town full of busy little guys who do things._
